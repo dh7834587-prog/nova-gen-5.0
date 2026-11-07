@@ -94,6 +94,49 @@ export function fileRoutes(db: Database, guards: AuthGuards): Router {
     res.end(file.data);
   });
 
+  router.patch(
+    "/:id",
+    asyncHandler(async (req, res) => {
+      const user = currentUser(res);
+      const file = getOwned(db.files, user.id, String(req.params.id));
+      if (!file) throw new HttpError(404, "not_found", "That file does not exist.");
+      const input = parseBody(
+        z.object({ name: z.string().trim().min(1, "Give the file a name.").max(120) }),
+        req.body,
+      );
+      const previous = file.name;
+      file.name = input.name;
+      log(db, user, "files.renamed", `${previous} → ${file.name}`);
+      save(db);
+      res.json({ item: toRecord(file) });
+    }),
+  );
+
+  /** Inline preview for text, images and PDFs the user uploaded themselves. */
+  router.get("/:id/preview", (req, res) => {
+    const user = currentUser(res);
+    const file = getOwned(db.files, user.id, String(req.params.id));
+    if (!file) throw new HttpError(404, "not_found", "That file does not exist.");
+    const previewable =
+      file.mimeType.startsWith("image/") ||
+      file.mimeType === "application/pdf" ||
+      file.mimeType.startsWith("text/") ||
+      /json|xml|javascript|typescript|csv|markdown/.test(file.mimeType);
+    if (!previewable) {
+      throw new HttpError(
+        415,
+        "preview_unsupported",
+        "This file type has no in-app preview. Download it to open it locally.",
+      );
+    }
+    res.setHeader("content-type", file.mimeType);
+    res.setHeader("content-length", String(file.data.length));
+    res.setHeader("x-content-type-options", "nosniff");
+    res.setHeader("content-security-policy", "default-src 'none'; sandbox");
+    res.setHeader("content-disposition", `inline; filename="${safeFileName(file.name)}"`);
+    res.end(file.data);
+  });
+
   router.delete("/:id", (req, res) => {
     const user = currentUser(res);
     const file = getOwned(db.files, user.id, String(req.params.id));
