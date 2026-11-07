@@ -83,17 +83,45 @@ export function PlansPage() {
     setError(null);
     setNotice(null);
     try {
-      const payload = await api<{ message: string }>("/api/billing/custom-quote", {
+      const payload = await api<{ message: string }>("/api/billing/custom-requests", {
         method: "POST",
-        body: JSON.stringify({ details: quoteDetails.trim() }),
+        body: JSON.stringify({
+          requirements: requirements.trim(),
+          scale,
+          durationPreference: durationPreference.trim(),
+        }),
       });
       setNotice(payload.message);
-      setQuoteDetails("");
+      setRequirements("");
+      setDurationPreference("");
       await load();
     } catch (cause) {
       setError(errorMessage(cause));
     } finally {
       setQuoteBusy(false);
+    }
+  };
+
+  const answerQuote = async (request: CustomPlanRequest, decision: "accept" | "decline") => {
+    const label =
+      decision === "accept"
+        ? "Accept this quotation? Your plan still activates only after the owner confirms payment."
+        : "Decline this quotation? The request will be closed.";
+    if (!window.confirm(label)) return;
+    setRequestBusy(request.id);
+    setError(null);
+    try {
+      const payload = await api<{ message: string }>(
+        `/api/billing/custom-requests/${request.id}/${decision}`,
+        { method: "POST", body: JSON.stringify({}) },
+      );
+      setNotice(payload.message);
+      await load();
+      await refresh();
+    } catch (cause) {
+      setError(errorMessage(cause));
+    } finally {
+      setRequestBusy(null);
     }
   };
 
