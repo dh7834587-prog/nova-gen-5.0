@@ -88,14 +88,14 @@ export function conversationRoutes(db: Database, guards: AuthGuards): Router {
 
   router.get("/:id", (req, res) => {
     const user = currentUser(res);
-    const conversation = getOwned(db.conversations, user.id, req.params.id);
+    const conversation = getOwned(db.conversations, user.id, String(req.params.id));
     if (!conversation) throw new HttpError(404, "not_found", "That conversation does not exist.");
     res.json({ item: conversation });
   });
 
   router.delete("/:id", (req, res) => {
     const user = currentUser(res);
-    const conversation = getOwned(db.conversations, user.id, req.params.id);
+    const conversation = getOwned(db.conversations, user.id, String(req.params.id));
     if (!conversation) throw new HttpError(404, "not_found", "That conversation does not exist.");
     db.conversations.delete(conversation.id);
     log(db, user, "assistant.conversation_deleted", conversation.title);

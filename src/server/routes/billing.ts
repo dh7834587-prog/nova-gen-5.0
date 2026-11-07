@@ -4,7 +4,7 @@ import { PLANS, computeEntitlement, createTrialSubscription, findPlan } from "..
 import type { PaymentSubmission, PlanCatalogue, PlanId } from "../../shared/types.js";
 import type { AuthGuards } from "../auth/middleware.js";
 import { asyncHandler, currentUser, HttpError, log, parseBody, save } from "../http.js";
-import { getOwned, listOwned, newId, nowIso, type Database } from "../store.js";
+import { listOwned, newId, nowIso, type Database } from "../store.js";
 
 const paymentSchema = z.object({
   planId: z.enum(["premium-monthly", "premium-yearly"]),
@@ -37,7 +37,7 @@ export function billingRoutes(db: Database, guards: AuthGuards): Router {
   router.get("/plans", (_req, res) => {
     const user = currentUser(res);
     const subscription = subscriptionFor(db, user.id);
-    const mine = listOwned(db.payments, user.id);
+    const mine = paymentsFor(db, user.id);
 
     const catalogue: PlanCatalogue = {
       plans: PLANS,
@@ -121,7 +121,7 @@ export function billingRoutes(db: Database, guards: AuthGuards): Router {
 
   router.get("/payments", (_req, res) => {
     const user = currentUser(res);
-    const mine = listOwned(db.payments, user.id);
+    const mine = paymentsFor(db, user.id);
     res.json({
       pending: mine.filter((payment) => payment.status === "pending"),
       history: mine.filter((payment) => payment.status !== "pending"),

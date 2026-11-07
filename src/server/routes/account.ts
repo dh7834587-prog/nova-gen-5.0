@@ -46,7 +46,7 @@ export function accountRoutes(db: Database, guards: AuthGuards): Router {
 
   router.delete("/sessions/:id", (req, res) => {
     const user = currentUser(res);
-    const session = db.sessions.get(req.params.id);
+    const session = db.sessions.get(String(req.params.id));
     if (!session || session.userId !== user.id) {
       throw new HttpError(404, "not_found", "That session does not exist.");
     }

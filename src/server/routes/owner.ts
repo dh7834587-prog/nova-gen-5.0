@@ -114,7 +114,7 @@ export function ownerRoutes(db: Database, guards: AuthGuards): Router {
     "/users/:id",
     asyncHandler(async (req, res) => {
       const actor = currentUser(res);
-      const target = db.users.get(req.params.id);
+      const target = db.users.get(String(req.params.id));
       if (!target) throw new HttpError(404, "not_found", "That user does not exist.");
       const input = parseBody(userPatchSchema, req.body);
 
@@ -152,7 +152,7 @@ export function ownerRoutes(db: Database, guards: AuthGuards): Router {
     "/subscriptions/:userId",
     asyncHandler(async (req, res) => {
       const actor = currentUser(res);
-      const target = db.users.get(req.params.userId);
+      const target = db.users.get(String(req.params.userId));
       if (!target) throw new HttpError(404, "not_found", "That user does not exist.");
       const input = parseBody(subscriptionPatchSchema, req.body);
 
@@ -194,7 +194,7 @@ export function ownerRoutes(db: Database, guards: AuthGuards): Router {
     "/payments/:id/approve",
     asyncHandler(async (req, res) => {
       const actor = currentUser(res);
-      const payment = db.payments.get(req.params.id);
+      const payment = db.payments.get(String(req.params.id));
       if (!payment) throw new HttpError(404, "not_found", "That payment does not exist.");
       if (payment.status !== "pending") {
         throw new HttpError(409, "already_reviewed", "That payment was already reviewed.");
@@ -232,7 +232,7 @@ export function ownerRoutes(db: Database, guards: AuthGuards): Router {
     "/payments/:id/reject",
     asyncHandler(async (req, res) => {
       const actor = currentUser(res);
-      const payment = db.payments.get(req.params.id);
+      const payment = db.payments.get(String(req.params.id));
       if (!payment) throw new HttpError(404, "not_found", "That payment does not exist.");
       if (payment.status !== "pending") {
         throw new HttpError(409, "already_reviewed", "That payment was already reviewed.");

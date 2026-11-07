@@ -85,7 +85,7 @@ export default function App() {
       <div className="boot">
         <Panel>
           <EmptyState
-            icon="dashboard"
+            icon="grid"
             title="This route does not exist"
             description="The NOVA module you asked for is not registered."
             action={
@@ -107,7 +107,7 @@ export default function App() {
       <AppShell module={module}>
         <Panel>
           <EmptyState
-            icon="lock"
+            icon="shield"
             title="No access to this module"
             description={
               ownerBlocked

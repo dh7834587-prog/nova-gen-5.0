@@ -114,7 +114,7 @@ export function ImagePage() {
             placeholder="A violet holographic interface floating above a black desk, cinematic lighting…"
             onChange={(event) => setPrompt(event.target.value)}
           />
-          <Button type="submit" icon="images" loading={loading} disabled={!prompt.trim() || !entitlement?.aiAllowed}>
+          <Button type="submit" icon="image" loading={loading} disabled={!prompt.trim() || !entitlement?.aiAllowed}>
             Generate image
           </Button>
         </form>

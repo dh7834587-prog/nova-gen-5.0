@@ -84,7 +84,7 @@ export function fileRoutes(db: Database, guards: AuthGuards): Router {
 
   router.get("/:id/download", (req, res) => {
     const user = currentUser(res);
-    const file = getOwned(db.files, user.id, req.params.id);
+    const file = getOwned(db.files, user.id, String(req.params.id));
     if (!file) throw new HttpError(404, "not_found", "That file does not exist.");
 
     res.setHeader("content-type", file.mimeType);
@@ -96,7 +96,7 @@ export function fileRoutes(db: Database, guards: AuthGuards): Router {
 
   router.delete("/:id", (req, res) => {
     const user = currentUser(res);
-    const file = getOwned(db.files, user.id, req.params.id);
+    const file = getOwned(db.files, user.id, String(req.params.id));
     if (!file) throw new HttpError(404, "not_found", "That file does not exist.");
     db.files.delete(file.id);
     log(db, user, "files.deleted", file.name);

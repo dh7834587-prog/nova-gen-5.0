@@ -64,7 +64,7 @@ function collectionRouter<T extends OwnedRow>(
     "/:id",
     asyncHandler(async (req, res) => {
       const user = currentUser(res);
-      const row = getOwned(options.collection, user.id, req.params.id);
+      const row = getOwned(options.collection, user.id, String(req.params.id));
       if (!row) throw new HttpError(404, "not_found", "That record does not exist.");
       const input = parseBody(options.updateSchema, req.body);
       options.apply(row, input);
@@ -76,7 +76,7 @@ function collectionRouter<T extends OwnedRow>(
 
   router.delete("/:id", (req, res) => {
     const user = currentUser(res);
-    const row = getOwned(options.collection, user.id, req.params.id);
+    const row = getOwned(options.collection, user.id, String(req.params.id));
     if (!row) throw new HttpError(404, "not_found", "That record does not exist.");
     options.collection.delete(row.id);
     log(db, user, `${options.moduleId}.deleted`, options.describe(row));

@@ -176,7 +176,7 @@ export function authRoutes(db: Database): Router {
     res.json({ ok: true });
   });
 
-  router.get("/me", (req, res) => {
+  router.get("/me", (_req, res) => {
     const user = res.locals.user as StoredUser | undefined;
     if (!user) {
       res.json({ user: null, entitlement: null, accessibleModules: [], providers: listAuthProviders() });
@@ -193,7 +193,7 @@ export function authRoutes(db: Database): Router {
   });
 
   router.get("/oauth/:provider/start", (req, res) => {
-    const provider = req.params.provider;
+    const provider = String(req.params.provider);
     if (!isOAuthProvider(provider)) {
       throw new HttpError(404, "unknown_provider", "Unknown sign-in provider.");
     }
@@ -213,7 +213,7 @@ export function authRoutes(db: Database): Router {
   router.get(
     "/oauth/:provider/callback",
     asyncHandler(async (req, res) => {
-      const provider = req.params.provider;
+      const provider = String(req.params.provider);
       if (!isOAuthProvider(provider)) {
         res.redirect("/?authError=Unknown%20sign-in%20provider.");
         return;
