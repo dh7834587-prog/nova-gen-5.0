@@ -1,27 +1,51 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FileRecord } from "../../shared/types.js";
 import { api, errorMessage, formatBytes, formatDateTime } from "../api.js";
-import { Button, EmptyState, Notice, Panel, PanelHeader } from "../components/ui.js";
+import { Badge, Button, EmptyState, Input, Notice, Panel, PanelHeader } from "../components/ui.js";
 
 const MAX_BYTES = 1_000_000;
+
+type PreviewKind = "image" | "pdf" | "text";
+
+interface PreviewState {
+  file: FileRecord;
+  kind: PreviewKind;
+  text?: string;
+}
 
 function readAsBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onerror = () => reject(new Error("That file could not be read."));
-    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onload = () => {
+      const result = String(reader.result ?? "");
+      resolve(result.slice(result.indexOf(",") + 1));
+    };
+    reader.onerror = () => reject(new Error("Could not read that file from this device."));
     reader.readAsDataURL(file);
   });
 }
 
+function previewKind(mimeType: string): PreviewKind | null {
+  if (mimeType.startsWith("image/")) return "image";
+  if (mimeType === "application/pdf") return "pdf";
+  if (mimeType.startsWith("text/") || /json|xml|javascript|typescript|csv|markdown/.test(mimeType)) {
+    return "text";
+  }
+  return null;
+}
+
 export function FilesPage() {
   const [items, setItems] = useState<FileRecord[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [preview, setPreview] = useState<PreviewState | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const load = useCallback(async () => {
+    setLoading(true);
     try {
       const payload = await api<{ items: FileRecord[] }>("/api/files");
       setItems(payload.items);
@@ -61,10 +85,57 @@ export function FilesPage() {
     }
   };
 
-  const remove = async (id: string) => {
+  const remove = async (item: FileRecord) => {
+    if (!window.confirm(`Delete “${item.name}”? This cannot be undone.`)) return;
     try {
-      await api(`/api/files/${id}`, { method: "DELETE" });
-      setItems((current) => current.filter((item) => item.id !== id));
+      await api(`/api/files/${item.id}`, { method: "DELETE" });
+      setItems((current) => current.filter((row) => row.id !== item.id));
+      if (preview?.file.id === item.id) setPreview(null);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  };
+
+  const startRename = (item: FileRecord) => {
+    setRenaming(item.id);
+    setRenameValue(item.name);
+    setError(null);
+  };
+
+  const saveRename = async (item: FileRecord) => {
+    const name = renameValue.trim();
+    if (!name) {
+      setError("Give the file a name.");
+      return;
+    }
+    try {
+      const payload = await api<{ item: FileRecord }>(`/api/files/${item.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ name }),
+      });
+      setItems((current) => current.map((row) => (row.id === item.id ? payload.item : row)));
+      setRenaming(null);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  };
+
+  const openPreview = async (item: FileRecord) => {
+    const kind = previewKind(item.mimeType);
+    if (!kind) {
+      setError("This file type has no in-app preview. Download it to open it locally.");
+      return;
+    }
+    setError(null);
+    if (kind !== "text") {
+      setPreview({ file: item, kind });
+      return;
+    }
+    try {
+      const response = await fetch(`/api/files/${item.id}/preview`, { credentials: "same-origin" });
+      if (!response.ok) throw new Error(`Preview failed with status ${response.status}.`);
+      const text = await response.text();
+      setPreview({ file: item, kind, text });
     } catch (cause) {
       setError(errorMessage(cause));
     }
@@ -79,8 +150,8 @@ export function FilesPage() {
           <span className="eyebrow">Vault</span>
           <h1>File Manager</h1>
           <p>
-            Private per-account storage. Downloads require your session — there is no public path to a stored
-            file.
+            Private per-account storage. Downloads and previews require your session — there is no public path to a
+            stored file.
           </p>
         </div>
         <div className="page-head-action">
@@ -131,17 +202,39 @@ export function FilesPage() {
                     <span aria-hidden="true">▣</span>
                   </span>
                   <span className="list-body">
-                    <strong>{item.name}</strong>
+                    {renaming === item.id ? (
+                      <span className="inline-form">
+                        <Input
+                          value={renameValue}
+                          aria-label="New file name"
+                          onChange={(event) => setRenameValue(event.target.value)}
+                        />
+                        <Button type="button" variant="quiet" onClick={() => void saveRename(item)}>
+                          Save
+                        </Button>
+                        <Button type="button" variant="ghost" onClick={() => setRenaming(null)}>
+                          Cancel
+                        </Button>
+                      </span>
+                    ) : (
+                      <strong>{item.name}</strong>
+                    )}
                     <span>
                       {formatBytes(item.size)} · {item.mimeType}
                     </span>
                   </span>
                   <span className="list-meta">{formatDateTime(item.createdAt)}</span>
                   <div className="record-actions">
+                    <Button variant="quiet" type="button" onClick={() => void openPreview(item)}>
+                      Preview
+                    </Button>
+                    <Button variant="quiet" type="button" onClick={() => startRename(item)}>
+                      Rename
+                    </Button>
                     <a className="btn btn-quiet" href={`/api/files/${item.id}/download`}>
                       Download
                     </a>
-                    <Button variant="quiet" type="button" onClick={() => void remove(item.id)}>
+                    <Button variant="danger" type="button" onClick={() => void remove(item)}>
                       Delete
                     </Button>
                   </div>
@@ -151,6 +244,39 @@ export function FilesPage() {
           </ul>
         )}
       </Panel>
+
+      {preview ? (
+        <Panel>
+          <PanelHeader
+            title={preview.file.name}
+            subtitle={`${preview.file.mimeType} · ${formatBytes(preview.file.size)}`}
+            action={
+              <div className="row-actions">
+                <Badge tone="violet">Preview</Badge>
+                <Button variant="ghost" type="button" onClick={() => setPreview(null)}>
+                  Close
+                </Button>
+              </div>
+            }
+          />
+          {preview.kind === "image" ? (
+            <img
+              className="preview-media"
+              src={`/api/files/${preview.file.id}/preview`}
+              alt={preview.file.name}
+            />
+          ) : preview.kind === "pdf" ? (
+            <iframe
+              className="preview-frame"
+              title={preview.file.name}
+              src={`/api/files/${preview.file.id}/preview`}
+              sandbox=""
+            />
+          ) : (
+            <pre className="preview-text">{preview.text ?? ""}</pre>
+          )}
+        </Panel>
+      ) : null}
     </div>
   );
 }
