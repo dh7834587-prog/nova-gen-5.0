@@ -15,6 +15,8 @@ import { fileRoutes } from "./routes/files.js";
 import { generationRoutes } from "./routes/generation.js";
 import { ownerRoutes } from "./routes/owner.js";
 import { recordRoutes } from "./routes/records.js";
+import { researchRoutes } from "./routes/research.js";
+import { emailRateLimiter } from "./middleware/rateLimit.js";
 import { createGeminiProvider, ProviderNotConfiguredError, ProviderRequestError } from "./services/gemini.js";
 import { loadDatabase, purgeExpiredSessions, type Database } from "./store.js";
 
@@ -74,6 +76,14 @@ export function createApp(db: Database = loadDatabase(env.dataDir)): NovaApp {
 
   app.use(guards.attachUser);
 
+  // Broad API throttle plus a tighter limiter on credential endpoints.
+  const apiLimiter = createRateLimiter({ windowMs: 60_000, max: 240 });
+  const authLimiter = emailRateLimiter(10 * 60_000, 12);
+  app.use("/api", apiLimiter);
+  app.use("/api/auth/login", authLimiter);
+  app.use("/api/auth/register", authLimiter);
+  app.use("/api/auth/forgot-password", authLimiter);
+
   app.use("/api/auth", authRoutes(db));
   app.use("/api/account", accountRoutes(db, guards));
   app.use("/api/dashboard", dashboardRoutes(db, provider, guards));
@@ -82,6 +92,7 @@ export function createApp(db: Database = loadDatabase(env.dataDir)): NovaApp {
   app.use("/api/records", recordRoutes(db, guards));
   app.use("/api/files", fileRoutes(db, guards));
   app.use("/api/browser", browserRoutes(db, guards));
+  app.use("/api/research", researchRoutes(db, guards, provider));
   app.use("/api/generate", generationRoutes(db, provider, guards));
   app.use("/api/billing", billingRoutes(db, guards));
   app.use("/api/owner", ownerRoutes(db, guards));
