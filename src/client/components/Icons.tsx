@@ -24,6 +24,9 @@ const PATHS: Record<IconName, string> = {
   menu: "M4 7h16M4 12h16M4 17h16",
   close: "M6 6l12 12M18 6L6 18",
   check: "M4 12l5 5L20 6",
+  search: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM16.5 16.5L21 21",
+  bookmark: "M6 4h12v17l-6-4-6 4z",
+  clock: "M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM12 8v4l3 2",
 };
 
 export function Icon({ name, size = 18 }: { name: IconName; size?: number }) {

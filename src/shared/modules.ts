@@ -43,7 +43,10 @@ export type IconName =
   | "trash"
   | "menu"
   | "close"
-  | "check";
+  | "check"
+  | "search"
+  | "bookmark"
+  | "clock";
 
 export const MODULES: ModuleDefinition[] = [
   {
