@@ -4,8 +4,12 @@ import path from "node:path";
 import { DEFAULT_PAYMENT_SETTINGS } from "../shared/plans.js";
 import type {
   AuditEvent,
+  BookmarkRecord,
+  BrowsingHistoryRecord,
   Conversation,
   CreativeProject,
+  CustomPlanRequest,
+  GeneratedImageRecord,
   MemoryRecord,
   NoteRecord,
   PaymentSettings,
@@ -17,11 +21,24 @@ import type {
   StoredUser,
   SubscriptionRecord,
   TaskRecord,
+  UsageRecord,
 } from "../shared/types.js";
 
 export interface SessionRecord extends SessionInfo {
   /** SHA-256 of the cookie token, so a leaked store cannot mint cookies. */
   tokenHash: string;
+}
+
+/** One-time password-reset / email-verification token. Only hashes are stored. */
+export interface AuthTokenRecord {
+  id: string;
+  userId: string;
+  email: string;
+  purpose: "password_reset" | "email_verification";
+  tokenHash: string;
+  createdAt: string;
+  expiresAt: string;
+  usedAt: string | null;
 }
 
 export interface Database {
@@ -35,10 +52,19 @@ export interface Database {
   research: Map<string, ResearchRecord>;
   creative: Map<string, CreativeProject>;
   files: Map<string, StoredFile>;
+  images: Map<string, GeneratedImageRecord>;
+  bookmarks: Map<string, BookmarkRecord>;
+  history: Map<string, BrowsingHistoryRecord>;
+  customRequests: Map<string, CustomPlanRequest>;
+  authTokens: Map<string, AuthTokenRecord>;
+  /** Keyed by `${userId}:${day}`. */
+  usage: Map<string, UsageRecord>;
   /** Keyed by user id: one subscription row per account. */
   subscriptions: Map<string, SubscriptionRecord>;
   payments: Map<string, PaymentSubmission>;
   settings: PaymentSettings;
+  /** Owner-configurable trial length in days. */
+  trialDays: number;
   audit: AuditEvent[];
 }
 
@@ -62,9 +88,16 @@ export function createDatabase(): Database {
     research: new Map(),
     creative: new Map(),
     files: new Map(),
+    images: new Map(),
+    bookmarks: new Map(),
+    history: new Map(),
+    customRequests: new Map(),
+    authTokens: new Map(),
+    usage: new Map(),
     subscriptions: new Map(),
     payments: new Map(),
     settings: { ...DEFAULT_PAYMENT_SETTINGS, updatedAt: nowIso() },
+    trialDays: TRIAL_DAYS,
     audit: [],
   };
 }
