@@ -187,8 +187,8 @@ export interface PendingAuthToken {
   purpose: "password_reset" | "email_verification";
   createdAt: string;
   expiresAt: string;
-  /** Only shown to the owner because no mail provider is configured. */
-  link: string;
+  /** Minted once for the owner; never re-readable from the queue. */
+  link: string | null;
 }
 
 export interface ProviderUsage {

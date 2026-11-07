@@ -29,6 +29,7 @@ export function toPublicUser(user: StoredUser): PublicUser {
     preferences: user.preferences,
     createdAt: user.createdAt,
     lastLoginAt: user.lastLoginAt,
+    emailVerifiedAt: user.emailVerifiedAt ?? null,
   };
 }
 
