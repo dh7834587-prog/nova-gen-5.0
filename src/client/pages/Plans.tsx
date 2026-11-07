@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import type { PlanCatalogue, PaymentMethod, PaymentSubmission, PlanId } from "../../shared/types.js";
+import type {
+  CustomPlanRequest,
+  PlanCatalogue,
+  PaymentMethod,
+  PaymentSubmission,
+  PlanId,
+} from "../../shared/types.js";
 import { api, errorMessage, formatDate, formatDateTime } from "../api.js";
 import { useSession } from "../session.js";
 import { Badge, Button, EmptyState, Field, Input, Notice, Panel, PanelHeader, Select, TextArea } from "../components/ui.js";
@@ -21,8 +27,12 @@ export function PlansPage() {
   const [reference, setReference] = useState("");
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [quoteDetails, setQuoteDetails] = useState("");
+  const [requirements, setRequirements] = useState("");
+  const [scale, setScale] = useState<"personal" | "team" | "business">("personal");
+  const [durationPreference, setDurationPreference] = useState("");
+  const [requests, setRequests] = useState<CustomPlanRequest[]>([]);
   const [quoteBusy, setQuoteBusy] = useState(false);
+  const [requestBusy, setRequestBusy] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
