@@ -105,7 +105,7 @@ export function OwnerPage() {
 
       {stats ? (
         <div className="stat-grid">
-          <StatTile icon="owner" label="Users" value={String(stats.users)} hint={`${stats.activeUsers} active`} />
+          <StatTile icon="shield" label="Users" value={String(stats.users)} hint={`${stats.activeUsers} active`} />
           <StatTile icon="plans" label="Pending payments" value={String(stats.pendingPayments)} hint="Awaiting review" />
           <StatTile icon="plans" label="Active plans" value={String(stats.activeSubscriptions)} hint="Paid or trialing" />
           <StatTile icon="settings" label="Suspended" value={String(stats.suspended)} hint={`${stats.owners} owner`} />
@@ -246,7 +246,7 @@ function UserCard({
   onChange: (patch: Record<string, unknown>) => void;
 }) {
   const allModules = user.permissions.modules === "all";
-  const granted = allModules ? MODULES.map((module) => module.id) : user.permissions.modules;
+  const granted: string[] = allModules ? MODULES.map((module) => module.id) : user.permissions.modules;
   const [open, setOpen] = useState(false);
 
   const toggleModule = (id: string) => {
@@ -328,7 +328,7 @@ function UserCard({
                     checked={granted.includes(module.id)}
                     onChange={() => toggleModule(module.id)}
                   />
-                  <span>{module.label}</span>
+                  <span>{module.title}</span>
                 </label>
               ))}
             </div>
@@ -445,7 +445,7 @@ function AuditRow({ event }: { event: AuditEvent }) {
       <div>
         <strong>{event.action}</strong>
         <p>
-          {event.actorEmail} · {formatDateTime(event.createdAt)}
+          {event.actorEmail} · {formatDateTime(event.at)}
         </p>
         {event.detail ? <p className="muted small">{event.detail}</p> : null}
       </div>

@@ -21,10 +21,11 @@ interface Item {
 
 type Draft = Record<string, string>;
 
-function toDraft(fields: FieldSpec[], item?: Record<string, unknown>): Draft {
+function toDraft<T>(fields: FieldSpec[], item?: T): Draft {
+  const record = item as Record<string, unknown> | undefined;
   const draft: Draft = {};
   for (const field of fields) {
-    const value = item?.[field.name];
+    const value = record?.[field.name];
     draft[field.name] =
       field.type === "tags"
         ? Array.isArray(value)

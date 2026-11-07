@@ -30,6 +30,13 @@ function subscriptionFor(db: Database, userId: string) {
   return existing;
 }
 
+/** Payments are keyed by submitter, not by an `ownerId` field, so filter directly. */
+function paymentsFor(db: Database, userId: string): PaymentSubmission[] {
+  return [...db.payments.values()]
+    .filter((payment) => payment.userId === userId)
+    .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
+}
+
 export function billingRoutes(db: Database, guards: AuthGuards): Router {
   const router = Router();
   router.use(guards.requireUser);
