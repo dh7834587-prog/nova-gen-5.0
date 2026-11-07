@@ -58,15 +58,21 @@ const register = (call: ReturnType<typeof client>, name: string, email: string) 
  * Tests share one in-memory database, so an account created by an earlier
  * test is reused by signing in instead of failing with a duplicate email.
  */
+const accounts = new Map<string, ReturnType<typeof client>>();
+
 async function signIn(name: string, email: string) {
+  const cached = accounts.get(email);
+  if (cached) return cached;
   const call = client();
+  accounts.set(email, call);
   const created = await register(call, name, email);
-  if (created.status === 201) return call;
-  const login = await call("/api/auth/login", {
-    method: "POST",
-    body: JSON.stringify({ email, password: PASSWORD }),
-  });
-  expect(login.status).toBe(200);
+  if (created.status !== 201) {
+    const login = await call("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password: PASSWORD }),
+    });
+    expect(login.status).toBe(200);
+  }
   return call;
 }
 
@@ -136,7 +142,7 @@ describe("authentication and workspace isolation", () => {
       method: "POST",
       body: JSON.stringify({
         title: "Key",
-        content: "my gemini key is AIzaSyD-abcdefghijklmnopqrstuvwxyz012345",
+        content: "api key: sk-live-abcdef123456",
       }),
     });
     expect(reply.status).toBe(400);
