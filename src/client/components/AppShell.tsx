@@ -4,6 +4,7 @@ import { formatDate } from "../api.js";
 import { useRouter } from "../router.js";
 import { useSession } from "../session.js";
 import { Icon } from "./Icons.js";
+import { InstallPrompt } from "./InstallPrompt.js";
 import { Badge, Button } from "./ui.js";
 
 const GROUPS: ModuleGroup[] = ["Core", "Create", "Work", "Account"];
