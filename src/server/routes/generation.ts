@@ -70,7 +70,7 @@ export function generationRoutes(db: Database, provider: AiProvider, guards: Aut
           entitlement.reason ?? "Your AI access is not active. Choose a plan to continue.",
         );
       }
-      if (!entitlement.features.imageGeneration) {
+      if (entitlement.planId === "free") {
         throw new HttpError(
           403,
           "premium_feature",
@@ -89,7 +89,7 @@ export function generationRoutes(db: Database, provider: AiProvider, guards: Aut
       }
 
       try {
-        assertQuota(db, user, "images");
+        assertQuota(db, user.id, entitlement, "images");
       } catch (error) {
         if (error instanceof QuotaExceededError) {
           throw new HttpError(429, "quota_exceeded", error.message);
