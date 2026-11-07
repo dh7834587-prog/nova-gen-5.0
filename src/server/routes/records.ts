@@ -4,6 +4,7 @@ import type { AuthGuards } from "../auth/middleware.js";
 import { env } from "../env.js";
 import { asyncHandler, currentUser, HttpError, log, parseBody, save } from "../http.js";
 import { countOwned, getOwned, listOwned, newId, nowIso, type Database } from "../store.js";
+import { looksLikeSecret } from "../services/novaChat.js";
 
 /**
  * Shared CRUD router for the record-based modules. Every read and write goes
@@ -35,9 +36,19 @@ function collectionRouter<T extends OwnedRow>(
   const router = Router();
   router.use(guards.requireUser, guards.requireModule(options.moduleId));
 
-  router.get("/", (_req, res) => {
+  router.get("/", (req, res) => {
     const user = currentUser(res);
-    res.json({ items: listOwned(options.collection, user.id) });
+    const items = listOwned(options.collection, user.id);
+    const rawQuery = typeof req.query.q === "string" ? req.query.q.trim().toLowerCase() : "";
+    if (!rawQuery) {
+      res.json({ items });
+      return;
+    }
+    // Simple local search across the user's own rows; nothing leaves the server.
+    const filtered = items.filter((row) =>
+      JSON.stringify(row).toLowerCase().includes(rawQuery),
+    );
+    res.json({ items: filtered, query: rawQuery });
   });
 
   router.post(
