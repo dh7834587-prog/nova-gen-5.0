@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import type {
   AuditEvent,
+  CustomPlanRequest,
   OwnerOverview,
   PaymentSubmission,
+  PendingAuthToken,
   PlanId,
   PublicUser,
   SubscriptionStatus,
@@ -11,12 +13,15 @@ import { MODULES } from "../../shared/modules.js";
 import { api, errorMessage, formatDate, formatDateTime } from "../api.js";
 import { Badge, Button, EmptyState, Field, Input, Notice, Panel, PanelHeader, Select, StatTile, TextArea } from "../components/ui.js";
 
-type Tab = "users" | "payments" | "subscriptions" | "settings" | "audit";
+type Tab = "users" | "payments" | "subscriptions" | "custom" | "usage" | "access" | "settings" | "audit";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "users", label: "Users" },
   { id: "payments", label: "Payments" },
   { id: "subscriptions", label: "Subscriptions" },
+  { id: "custom", label: "Custom plans" },
+  { id: "usage", label: "Usage" },
+  { id: "access", label: "Trial & access" },
   { id: "settings", label: "Payment settings" },
   { id: "audit", label: "Audit history" },
 ];
