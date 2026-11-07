@@ -82,6 +82,36 @@ export function OwnerPage() {
       return `${payment.reference} ${decision === "approve" ? "approved — the plan is now active." : "rejected."}`;
     });
 
+  const quoteRequest = (
+    request: CustomPlanRequest,
+    quote: { priceLabel: string; durationDays: number; usageLimit: string; note: string },
+  ) =>
+    run(`quote-${request.id}`, async () => {
+      await api(`/api/owner/custom-requests/${request.id}`, {
+        method: "PATCH",
+        body: JSON.stringify(quote),
+      });
+      return `Quotation sent to ${request.userEmail}.`;
+    });
+
+  const declineRequest = (request: CustomPlanRequest, ownerNote: string) =>
+    run(`decline-${request.id}`, async () => {
+      await api(`/api/owner/custom-requests/${request.id}/decline`, {
+        method: "POST",
+        body: JSON.stringify({ ownerNote }),
+      });
+      return `${request.userEmail}'s request declined.`;
+    });
+
+  const activateRequest = (request: CustomPlanRequest) =>
+    run(`activate-${request.id}`, async () => {
+      await api(`/api/owner/custom-requests/${request.id}/activate`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      return `Custom plan activated for ${request.userEmail}.`;
+    });
+
   if (error && !overview) {
     return (
       <Panel>
