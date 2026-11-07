@@ -1489,3 +1489,59 @@ button {
     background-position: -200% 0;
   }
 }
+
+/* PWA install prompt */
+.install-prompt {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border: 1px solid rgba(147, 112, 255, 0.32);
+  background: linear-gradient(135deg, rgba(91, 33, 182, 0.28), rgba(10, 7, 24, 0.9));
+}
+
+.install-prompt-body {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 220px;
+}
+
+.install-prompt-body p {
+  margin: 2px 0 0;
+}
+
+.install-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  border-radius: 12px;
+  color: #e9e2ff;
+  background: linear-gradient(140deg, rgba(139, 92, 246, 0.9), rgba(76, 29, 149, 0.9));
+  box-shadow: 0 0 18px rgba(139, 92, 246, 0.35);
+}
+
+.install-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.install-prompt-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+  .install-prompt {
+    align-items: flex-start;
+  }
+
+  .install-prompt-actions {
+    width: 100%;
+  }
+}

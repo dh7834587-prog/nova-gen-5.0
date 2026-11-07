@@ -113,6 +113,14 @@ export function createApp(db: Database = loadDatabase(env.dataDir)): NovaApp {
           if (/\/assets\//.test(filePath)) {
             res.setHeader("cache-control", "public, max-age=31536000, immutable");
           }
+          // The service worker and manifest must always be revalidated so a new
+          // release replaces the cached shell promptly.
+          if (/\/(sw\.js|manifest\.webmanifest|offline\.html)$/.test(filePath)) {
+            res.setHeader("cache-control", "no-cache");
+          }
+          if (/\/sw\.js$/.test(filePath)) {
+            res.setHeader("service-worker-allowed", "/");
+          }
         },
       }),
     );
