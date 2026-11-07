@@ -117,6 +117,22 @@ export function ownerRoutes(db: Database, guards: AuthGuards): Router {
       payments,
       audit: db.audit.slice(0, 60),
       paymentSettings: db.settings,
+      customRequests: [...db.customRequests.values()].sort((a, b) =>
+        b.createdAt.localeCompare(a.createdAt),
+      ),
+      usage: users.map((user) => {
+        const record = usageRecord(db, user.id);
+        return {
+          userId: user.id,
+          email: user.email,
+          day: dayKey(),
+          chatMessages: record.chatMessages,
+          images: record.images,
+          research: record.research,
+        };
+      }),
+      trialDays: db.trialDays,
+      pendingAuthTokens: listPendingTokens(db),
       stats: {
         users: users.length,
         activeUsers: users.filter((user) => user.status === "active").length,
@@ -294,6 +310,130 @@ export function ownerRoutes(db: Database, guards: AuthGuards): Router {
       log(db, actor, "owner.payment_settings_updated", "Manual payment receiving details changed");
       save(db);
       res.json({ payments: db.settings });
+    }),
+  );
+
+  /* ---------------- custom plan workflow ---------------- */
+
+  router.patch(
+    "/custom-requests/:id",
+    asyncHandler(async (req, res) => {
+      const actor = currentUser(res);
+      const request = db.customRequests.get(String(req.params.id));
+      if (!request) throw new HttpError(404, "not_found", "That request does not exist.");
+      if (request.status === "activated" || request.status === "declined") {
+        throw new HttpError(409, "closed", "That request is already closed.");
+      }
+      const input = parseBody(quoteReplySchema, req.body);
+      request.quote = {
+        priceLabel: input.priceLabel,
+        durationDays: input.durationDays,
+        usageLimit: input.usageLimit,
+        note: input.note,
+        quotedAt: nowIso(),
+        quotedBy: actor.email,
+      };
+      request.status = "quoted";
+      request.updatedAt = nowIso();
+      db.customRequests.set(request.id, request);
+      log(db, actor, "owner.custom_quote_sent", `${request.userEmail}: ${input.priceLabel}`);
+      save(db);
+      res.json({ item: request });
+    }),
+  );
+
+  router.post(
+    "/custom-requests/:id/decline",
+    asyncHandler(async (req, res) => {
+      const actor = currentUser(res);
+      const request = db.customRequests.get(String(req.params.id));
+      if (!request) throw new HttpError(404, "not_found", "That request does not exist.");
+      const input = parseBody(declineSchema, req.body);
+      request.status = "declined";
+      request.ownerNote = input.ownerNote;
+      request.updatedAt = nowIso();
+      db.customRequests.set(request.id, request);
+      log(db, actor, "owner.custom_request_declined", `${request.userEmail}`);
+      save(db);
+      res.json({ item: request });
+    }),
+  );
+
+  router.post(
+    "/custom-requests/:id/activate",
+    asyncHandler(async (req, res) => {
+      const actor = currentUser(res);
+      const request = db.customRequests.get(String(req.params.id));
+      if (!request) throw new HttpError(404, "not_found", "That request does not exist.");
+      if (!request.quote) {
+        throw new HttpError(409, "no_quote", "Send a quotation before activating the plan.");
+      }
+      if (request.status !== "accepted") {
+        throw new HttpError(
+          409,
+          "not_accepted",
+          "The user must accept the quotation before the custom plan can be activated.",
+        );
+      }
+      request.status = "activated";
+      request.updatedAt = nowIso();
+      db.customRequests.set(request.id, request);
+
+      const subscription = db.subscriptions.get(request.userId) ?? createTrialSubscription(request.userId);
+      subscription.planId = "custom";
+      subscription.status = "active";
+      subscription.currentPeriodEnd = new Date(
+        Date.now() + request.quote.durationDays * MS_PER_DAY,
+      ).toISOString();
+      subscription.customQuote = `${request.quote.priceLabel} · ${request.quote.durationDays} days · ${request.quote.usageLimit}`;
+      subscription.note = `Custom plan activated by ${actor.email}.`;
+      subscription.updatedAt = nowIso();
+      subscription.updatedBy = actor.id;
+      db.subscriptions.set(request.userId, subscription);
+
+      log(db, actor, "owner.custom_activated", `${request.userEmail}: ${request.quote.priceLabel}`);
+      save(db);
+      res.json({ item: request, subscription, entitlement: computeEntitlement(subscription) });
+    }),
+  );
+
+  /* ---------------- trial + verification delivery ---------------- */
+
+  router.patch(
+    "/trial",
+    asyncHandler(async (req, res) => {
+      const actor = currentUser(res);
+      const input = parseBody(trialSchema, req.body);
+      db.trialDays = input.trialDays;
+      log(db, actor, "owner.trial_updated", `Free trial set to ${input.trialDays} days`);
+      save(db);
+      res.json({ trialDays: db.trialDays });
+    }),
+  );
+
+  router.post(
+    "/auth-links",
+    asyncHandler(async (req, res) => {
+      const actor = currentUser(res);
+      const input = parseBody(authLinkSchema, req.body);
+      const target = [...db.users.values()].find((user) => user.email === input.email);
+      if (!target) throw new HttpError(404, "not_found", "No account uses that email.");
+      const { token, record } = createAuthToken(db, target, input.purpose);
+      log(db, actor, "owner.auth_link_minted", `${target.email}: ${input.purpose}`);
+      save(db);
+      res.status(201).json({
+        token: {
+          id: record.id,
+          email: record.email,
+          purpose: record.purpose,
+          expiresAt: record.expiresAt,
+        },
+        // Delivered manually because no mail provider is configured.
+        link: `/reset?token=${token}`,
+        message:
+          "Send this single-use link to the account holder yourself. NOVA does not email it, " +
+          "because no mail provider is configured on this server.",
+      });
     }),
   );
 
