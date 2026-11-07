@@ -396,7 +396,7 @@ function PaymentSettingsForm({
 }: {
   initial: OwnerOverview["paymentSettings"];
   busy: boolean;
-  onSave: (payload: Record<string, string>) => void;
+  onSave: (payload: OwnerOverview["paymentSettings"]) => void;
 }) {
   const [form, setForm] = useState(initial);
   return (
@@ -421,7 +421,8 @@ function PaymentSettingsForm({
         <Field label="Account name">
           <Input value={form.accountName} onChange={(event) => setForm({ ...form, accountName: event.target.value })} />
         </Field>
-        <Field label="Instructions" span>
+        <div className="field-span">
+          <Field label="Instructions">
           <TextArea
             rows={3}
             value={form.instructions}
