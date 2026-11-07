@@ -1,17 +1,21 @@
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { DEFAULT_PAYMENT_SETTINGS } from "../shared/plans.js";
 import type {
   AuditEvent,
   Conversation,
   CreativeProject,
   MemoryRecord,
   NoteRecord,
+  PaymentSettings,
+  PaymentSubmission,
   ResearchRecord,
   SessionInfo,
   SnippetRecord,
   StoredFile,
   StoredUser,
+  SubscriptionRecord,
   TaskRecord,
 } from "../shared/types.js";
 
@@ -31,6 +35,10 @@ export interface Database {
   research: Map<string, ResearchRecord>;
   creative: Map<string, CreativeProject>;
   files: Map<string, StoredFile>;
+  /** Keyed by user id: one subscription row per account. */
+  subscriptions: Map<string, SubscriptionRecord>;
+  payments: Map<string, PaymentSubmission>;
+  settings: PaymentSettings;
   audit: AuditEvent[];
 }
 
@@ -54,6 +62,9 @@ export function createDatabase(): Database {
     research: new Map(),
     creative: new Map(),
     files: new Map(),
+    subscriptions: new Map(),
+    payments: new Map(),
+    settings: { ...DEFAULT_PAYMENT_SETTINGS, updatedAt: nowIso() },
     audit: [],
   };
 }
@@ -102,6 +113,13 @@ export function findByEmail(db: Database, email: string): StoredUser | undefined
   return undefined;
 }
 
+export function hasOwner(db: Database): boolean {
+  for (const user of db.users.values()) {
+    if (user.role === "owner") return true;
+  }
+  return false;
+}
+
 /* ------------------------------------------------------------------ */
 /* Optional JSON snapshot persistence                                  */
 /* ------------------------------------------------------------------ */
@@ -117,6 +135,9 @@ interface SerializedDatabase {
   research: ResearchRecord[];
   creative: CreativeProject[];
   files: (Omit<StoredFile, "data"> & { data: string })[];
+  subscriptions: SubscriptionRecord[];
+  payments: PaymentSubmission[];
+  settings: PaymentSettings;
   audit: AuditEvent[];
 }
 
@@ -136,6 +157,9 @@ export function serialize(db: Database): SerializedDatabase {
     research: [...db.research.values()],
     creative: [...db.creative.values()],
     files: [...db.files.values()].map((file) => ({ ...file, data: file.data.toString("base64") })),
+    subscriptions: [...db.subscriptions.values()],
+    payments: [...db.payments.values()],
+    settings: db.settings,
     audit: db.audit,
   };
 }
@@ -153,6 +177,9 @@ export function hydrate(db: Database, raw: SerializedDatabase): void {
   for (const file of raw.files ?? []) {
     db.files.set(file.id, { ...file, data: Buffer.from(file.data, "base64") });
   }
+  for (const row of raw.subscriptions ?? []) db.subscriptions.set(row.userId, row);
+  for (const row of raw.payments ?? []) db.payments.set(row.id, row);
+  if (raw.settings) db.settings = { ...db.settings, ...raw.settings };
   db.audit = raw.audit ?? [];
 }
 
