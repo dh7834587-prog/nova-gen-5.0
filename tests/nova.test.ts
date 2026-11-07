@@ -33,7 +33,7 @@ function client() {
     const setCookies = response.headers.getSetCookie();
     for (const raw of setCookies) {
       const pair = raw.split(";")[0];
-      if (pair.startsWith("nova_session=") || pair.includes("=")) cookie = pair;
+      if (pair.startsWith("nova_session=")) cookie = pair;
     }
     const text = await response.text();
     let body: any = null;
@@ -46,11 +46,29 @@ function client() {
   };
 }
 
+const PASSWORD = "NovaTest!2026";
+
 const register = (call: ReturnType<typeof client>, name: string, email: string) =>
   call("/api/auth/register", {
     method: "POST",
-    body: JSON.stringify({ name, email, password: "NovaTest!2026" }),
+    body: JSON.stringify({ name, email, password: PASSWORD }),
   });
+
+/**
+ * Tests share one in-memory database, so an account created by an earlier
+ * test is reused by signing in instead of failing with a duplicate email.
+ */
+async function signIn(name: string, email: string) {
+  const call = client();
+  const created = await register(call, name, email);
+  if (created.status === 201) return call;
+  const login = await call("/api/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password: PASSWORD }),
+  });
+  expect(login.status).toBe(200);
+  return call;
+}
 
 beforeAll(async () => {
   const { app } = createApp(createDatabase());
@@ -84,10 +102,8 @@ describe("authentication and workspace isolation", () => {
   });
 
   it("keeps each user's memories private", async () => {
-    const owner = client();
-    const member = client();
-    await register(owner, "NOVA Owner", "owner@nova.test");
-    await register(member, "Test Member", "member@nova.test");
+    const owner = await signIn("NOVA Owner", "owner@nova.test");
+    const member = await signIn("Test Member", "member@nova.test");
 
     const created = await member("/api/records/memory", {
       method: "POST",
@@ -115,8 +131,7 @@ describe("authentication and workspace isolation", () => {
   });
 
   it("rejects memories that look like credentials", async () => {
-    const member = client();
-    await register(member, "Test Member", "member@nova.test");
+    const member = await signIn("Test Member", "member@nova.test");
     const reply = await member("/api/records/memory", {
       method: "POST",
       body: JSON.stringify({
@@ -130,8 +145,7 @@ describe("authentication and workspace isolation", () => {
 
 describe("owner-only controls", () => {
   it("blocks members from the owner centre", async () => {
-    const member = client();
-    await register(member, "Test Member", "member@nova.test");
+    const member = await signIn("Test Member", "member@nova.test");
     const reply = await member("/api/owner/overview");
     expect(reply.status).toBe(403);
   });
@@ -139,10 +153,8 @@ describe("owner-only controls", () => {
 
 describe("manual mobile-money payments", () => {
   it("stays pending until the owner approves the transfer", async () => {
-    const owner = client();
-    const member = client();
-    await register(owner, "NOVA Owner", "owner@nova.test");
-    await register(member, "Test Member", "member@nova.test");
+    const owner = await signIn("NOVA Owner", "owner@nova.test");
+    const member = await signIn("Test Member", "member@nova.test");
 
     const submitted = await member("/api/billing/payments", {
       method: "POST",
@@ -184,8 +196,7 @@ describe("manual mobile-money payments", () => {
   });
 
   it("rejects duplicate transaction references", async () => {
-    const member = client();
-    await register(member, "Test Member", "member@nova.test");
+    const member = await signIn("Test Member", "member@nova.test");
     const payload = {
       planId: "premium-yearly",
       method: "orange_money",
@@ -203,10 +214,8 @@ describe("manual mobile-money payments", () => {
 
 describe("custom plan quotation workflow", () => {
   it("only activates after quote, acceptance and owner activation", async () => {
-    const owner = client();
-    const member = client();
-    await register(owner, "NOVA Owner", "owner@nova.test");
-    await register(member, "Test Member", "member@nova.test");
+    const owner = await signIn("NOVA Owner", "owner@nova.test");
+    const member = await signIn("Test Member", "member@nova.test");
 
     const brief = "I need a team workspace with 10 seats and priority research exports.";
     const submitted = await member("/api/billing/custom-requests", {
@@ -254,8 +263,7 @@ describe("custom plan quotation workflow", () => {
 
 describe("honest AI and safe outbound requests", () => {
   it("reports a missing Gemini key instead of inventing a reply", async () => {
-    const member = client();
-    await register(member, "Test Member", "member@nova.test");
+    const member = await signIn("Test Member", "member@nova.test");
     const reply = await member("/api/assistant/stream", {
       method: "POST",
       body: JSON.stringify({ message: "Hello NOVA" }),
@@ -266,8 +274,7 @@ describe("honest AI and safe outbound requests", () => {
   });
 
   it("refuses to read loopback and private network addresses", async () => {
-    const member = client();
-    await register(member, "Test Member", "member@nova.test");
+    const member = await signIn("Test Member", "member@nova.test");
     for (const url of ["http://127.0.0.1:3000/", "http://localhost/admin", "http://169.254.169.254/"]) {
       const reply = await member("/api/browser/read", {
         method: "POST",
