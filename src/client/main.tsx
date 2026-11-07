@@ -17,3 +17,12 @@ createRoot(container).render(
     </RouterProvider>
   </StrictMode>,
 );
+
+/* PWA: the service worker only caches the app shell; /api traffic always goes to the network. */
+if ("serviceWorker" in navigator && import.meta.env.PROD) {
+  window.addEventListener("load", () => {
+    void navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {
+      /* Installability is an enhancement; the app still works without it. */
+    });
+  });
+}
