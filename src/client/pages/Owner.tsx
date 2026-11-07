@@ -246,7 +246,8 @@ function UserCard({
   onChange: (patch: Record<string, unknown>) => void;
 }) {
   const allModules = user.permissions.modules === "all";
-  const granted: string[] = allModules ? MODULES.map((module) => module.id) : user.permissions.modules;
+  const granted: string[] =
+    user.permissions.modules === "all" ? MODULES.map((module) => module.id) : user.permissions.modules;
   const [open, setOpen] = useState(false);
 
   const toggleModule = (id: string) => {

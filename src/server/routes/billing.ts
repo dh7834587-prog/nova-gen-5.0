@@ -4,7 +4,7 @@ import { PLANS, computeEntitlement, createTrialSubscription, findPlan } from "..
 import type { PaymentSubmission, PlanCatalogue, PlanId } from "../../shared/types.js";
 import type { AuthGuards } from "../auth/middleware.js";
 import { asyncHandler, currentUser, HttpError, log, parseBody, save } from "../http.js";
-import { listOwned, newId, nowIso, type Database } from "../store.js";
+import { newId, nowIso, type Database } from "../store.js";
 
 const paymentSchema = z.object({
   planId: z.enum(["premium-monthly", "premium-yearly"]),
