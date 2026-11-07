@@ -217,10 +217,14 @@ export function hydrate(db: Database, raw: SerializedDatabase): void {
   for (const row of raw.conversations ?? []) db.conversations.set(row.id, row);
   for (const row of raw.memories ?? []) {
     // Snapshots written before memory categories existed still hydrate.
+    const legacy = row as typeof row & {
+      category?: string;
+      reviewStatus?: string;
+    };
     db.memories.set(row.id, {
-      category: "other",
-      reviewStatus: "approved",
       ...row,
+      category: (legacy.category ?? "other") as (typeof row)["category"],
+      reviewStatus: (legacy.reviewStatus ?? "approved") as (typeof row)["reviewStatus"],
     });
   }
   for (const row of raw.tasks ?? []) db.tasks.set(row.id, row);
