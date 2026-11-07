@@ -3,7 +3,6 @@ import { z } from "zod";
 import { MODULE_IDS } from "../../shared/modules.js";
 import { MS_PER_DAY, computeEntitlement, createTrialSubscription, findPlan } from "../../shared/plans.js";
 import type {
-  CustomPlanRequest,
   OwnerOverview,
   PlanId,
   SubscriptionStatus,
@@ -418,15 +417,14 @@ export function ownerRoutes(db: Database, guards: AuthGuards): Router {
       const input = parseBody(authLinkSchema, req.body);
       const target = [...db.users.values()].find((user) => user.email === input.email);
       if (!target) throw new HttpError(404, "not_found", "No account uses that email.");
-      const { token, record } = createAuthToken(db, target, input.purpose);
+      const { token, expiresAt } = createAuthToken(db, target, input.purpose);
       log(db, actor, "owner.auth_link_minted", `${target.email}: ${input.purpose}`);
       save(db);
       res.status(201).json({
         token: {
-          id: record.id,
-          email: record.email,
-          purpose: record.purpose,
-          expiresAt: record.expiresAt,
+          email: target.email,
+          purpose: input.purpose,
+          expiresAt,
         },
         // Delivered manually because no mail provider is configured.
         link: `/reset?token=${token}`,
