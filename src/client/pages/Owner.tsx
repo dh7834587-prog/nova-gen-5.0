@@ -238,6 +238,103 @@ export function OwnerPage() {
         </Panel>
       ) : null}
 
+      {tab === "custom" && overview ? (
+        <div className="stack">
+          {overview.customRequests.length === 0 ? (
+            <EmptyState
+              icon="plans"
+              title="No custom requests"
+              description="Briefs submitted from the plans page appear here for quoting."
+            />
+          ) : (
+            overview.customRequests.map((request) => (
+              <CustomRequestReview
+                key={request.id}
+                request={request}
+                busy={busy?.endsWith(request.id) ?? false}
+                onQuote={(quote) => void quoteRequest(request, quote)}
+                onDecline={(ownerNote) => void declineRequest(request, ownerNote)}
+                onActivate={() => {
+                  if (!window.confirm(`Activate the custom plan for ${request.userEmail}?`)) return;
+                  void activateRequest(request);
+                }}
+              />
+            ))
+          )}
+        </div>
+      ) : null}
+
+      {tab === "usage" && overview ? (
+        <Panel>
+          <PanelHeader title="Usage monitoring" subtitle={`Daily counters · ${overview.usage[0]?.day ?? "today"}`} />
+          {overview.usage.length === 0 ? (
+            <p className="muted">No usage recorded yet.</p>
+          ) : (
+            <ul className="list">
+              {overview.usage.map((row) => (
+                <li key={row.userId}>
+                  <div className="list-row list-row-static">
+                    <span className="list-body">
+                      <strong>{row.email}</strong>
+                      <span className="muted small">Counters reset each day (UTC).</span>
+                    </span>
+                    <div className="inline-controls">
+                      <Badge tone="violet">Chats {row.chatMessages}</Badge>
+                      <Badge tone="violet">Images {row.images}</Badge>
+                      <Badge tone="violet">Research {row.research}</Badge>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+      ) : null}
+
+      {tab === "access" && overview ? (
+        <div className="split">
+          <Panel>
+            <PanelHeader title="Free trial length" subtitle="Applies to new accounts" />
+            <TrialForm
+              trialDays={overview.trialDays}
+              busy={busy === "trial"}
+              onSave={(trialDays) =>
+                run("trial", async () => {
+                  await api("/api/owner/trial", { method: "PATCH", body: JSON.stringify({ trialDays }) });
+                  return `Free trial set to ${trialDays} days for new accounts.`;
+                })
+              }
+            />
+          </Panel>
+          <Panel>
+            <PanelHeader title="Account links" subtitle="Manually delivered — no mail provider configured" />
+            <AuthLinkForm
+              busy={busy === "auth-link"}
+              onMint={(email, purpose) =>
+                run("auth-link", async () => {
+                  const payload = await api<{ link: string; message: string }>("/api/owner/auth-links", {
+                    method: "POST",
+                    body: JSON.stringify({ email, purpose }),
+                  });
+                  return `${payload.message} Link: ${payload.link}`;
+                })
+              }
+            />
+            {overview.pendingAuthTokens.length > 0 ? (
+              <ul className="list">
+                {overview.pendingAuthTokens.map((token) => (
+                  <li key={token.id}>
+                    <AuthTokenRow token={token} />
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="muted small">No unused reset or verification links.</p>
+            )}
+          </Panel>
+        </div>
+      ) : null}
+
       {tab === "settings" && overview ? (
         <PaymentSettingsForm
           initial={overview.paymentSettings}
