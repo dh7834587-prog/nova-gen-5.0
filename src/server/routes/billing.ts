@@ -20,8 +20,10 @@ const paymentSchema = z.object({
   note: z.string().trim().max(400).default(""),
 });
 
-const quoteSchema = z.object({
-  details: z.string().trim().min(10, "Describe what you need so the owner can quote it.").max(1000),
+const customRequestSchema = z.object({
+  requirements: z.string().trim().min(10, "Describe what you need so the owner can quote it.").max(2000),
+  scale: z.enum(["personal", "team", "business"]).default("personal"),
+  durationPreference: z.string().trim().max(80).default(""),
 });
 
 function subscriptionFor(db: Database, userId: string) {
