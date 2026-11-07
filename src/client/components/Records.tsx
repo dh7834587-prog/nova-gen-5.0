@@ -5,7 +5,7 @@ import { Button, EmptyState, Field, Input, Notice, Select, TextArea } from "./ui
 export interface FieldSpec {
   name: string;
   label: string;
-  type: "text" | "textarea" | "select" | "tags" | "date";
+  type: "text" | "textarea" | "select" | "tags" | "date" | "boolean";
   placeholder?: string;
   options?: { value: string; label: string }[];
   required?: boolean;
@@ -53,6 +53,10 @@ function toPayload(fields: FieldSpec[], draft: Draft): Record<string, unknown> {
       continue;
     }
     if (raw === "") continue;
+    if (field.type === "boolean") {
+      payload[field.name] = raw === "true";
+      continue;
+    }
     payload[field.name] = raw;
   }
   return payload;
