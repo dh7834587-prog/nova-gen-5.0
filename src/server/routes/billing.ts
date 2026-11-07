@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { PLANS, computeEntitlement, createTrialSubscription, findPlan } from "../../shared/plans.js";
-import type { PaymentSubmission, PlanCatalogue, PlanId } from "../../shared/types.js";
+import type { CustomPlanRequest, PaymentSubmission, PlanCatalogue, PlanId } from "../../shared/types.js";
 import type { AuthGuards } from "../auth/middleware.js";
 import { asyncHandler, currentUser, HttpError, log, parseBody, save } from "../http.js";
 import { newId, nowIso, type Database } from "../store.js";
@@ -136,23 +136,108 @@ export function billingRoutes(db: Database, guards: AuthGuards): Router {
   });
 
   router.post(
-    "/custom-quote",
+    "/custom-requests",
     asyncHandler(async (req, res) => {
       const user = currentUser(res);
-      const input = parseBody(quoteSchema, req.body);
-      const subscription = subscriptionFor(db, user.id);
-      subscription.customQuote = input.details;
-      subscription.note = "Custom plan brief sent to the owner for a quote.";
-      subscription.updatedAt = nowIso();
-      subscription.updatedBy = user.id;
-      log(db, user, "billing.custom_quote_requested", input.details.slice(0, 160));
+      const input = parseBody(customRequestSchema, req.body);
+      const open = [...db.customRequests.values()].filter(
+        (request) => request.userId === user.id && request.status !== "declined" && request.status !== "activated",
+      );
+      if (open.length >= 3) {
+        throw new HttpError(
+          409,
+          "request_limit",
+          "You already have custom requests awaiting the owner. Wait for a reply before adding another.",
+        );
+      }
+      const at = nowIso();
+      const request: CustomPlanRequest = {
+        id: newId(),
+        userId: user.id,
+        userEmail: user.email,
+        userName: user.name,
+        requirements: input.requirements,
+        scale: input.scale,
+        durationPreference: input.durationPreference,
+        status: "submitted",
+        quote: null,
+        ownerNote: "",
+        createdAt: at,
+        updatedAt: at,
+      };
+      db.customRequests.set(request.id, request);
+      log(db, user, "billing.custom_request_submitted", input.requirements.slice(0, 160));
       save(db);
       res.status(201).json({
+        item: request,
+        message:
+          "Your brief is with the owner. No price or access is confirmed until the owner sends a " +
+          "quotation and you accept it.",
+      });
+    }),
+  );
+
+  router.get("/custom-requests", (_req, res) => {
+    const user = currentUser(res);
+    const mine = [...db.customRequests.values()]
+      .filter((request) => request.userId === user.id)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    res.json({ items: mine });
+  });
+
+  router.post(
+    "/custom-requests/:id/accept",
+    asyncHandler(async (req, res) => {
+      const user = currentUser(res);
+      const request = db.customRequests.get(String(req.params.id));
+      if (!request || request.userId !== user.id) {
+        throw new HttpError(404, "not_found", "That custom request does not exist.");
+      }
+      if (request.status !== "quoted" || !request.quote) {
+        throw new HttpError(409, "no_quote", "The owner has not sent a quotation for this request yet.");
+      }
+      request.status = "accepted";
+      request.updatedAt = nowIso();
+      db.customRequests.set(request.id, request);
+
+      const subscription = subscriptionFor(db, user.id);
+      subscription.planId = "custom";
+      subscription.status = "pending_approval";
+      subscription.customQuote = `${request.quote.priceLabel} · ${request.quote.durationDays} days · ${request.quote.usageLimit}`;
+      subscription.note =
+        "Custom quotation accepted. The owner activates the plan after confirming payment.";
+      subscription.updatedAt = nowIso();
+      subscription.updatedBy = user.id;
+
+      log(db, user, "billing.custom_quote_accepted", request.quote.priceLabel);
+      save(db);
+      res.json({
+        item: request,
         entitlement: computeEntitlement(subscription),
         message:
-          "Your brief was sent to the owner. Custom plans are individually quoted, so no price " +
-          "or activation is confirmed until the owner replies.",
+          "Quotation accepted. Your plan stays inactive until the owner confirms payment and " +
+          "activates the custom subscription.",
       });
+    }),
+  );
+
+  router.post(
+    "/custom-requests/:id/decline",
+    asyncHandler(async (req, res) => {
+      const user = currentUser(res);
+      const request = db.customRequests.get(String(req.params.id));
+      if (!request || request.userId !== user.id) {
+        throw new HttpError(404, "not_found", "That custom request does not exist.");
+      }
+      if (request.status !== "quoted") {
+        throw new HttpError(409, "no_quote", "There is no open quotation to decline.");
+      }
+      request.status = "declined";
+      request.updatedAt = nowIso();
+      db.customRequests.set(request.id, request);
+      log(db, user, "billing.custom_quote_declined", request.id);
+      save(db);
+      res.json({ item: request });
     }),
   );
 
