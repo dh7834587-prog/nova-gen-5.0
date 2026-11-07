@@ -428,7 +428,8 @@ function PaymentSettingsForm({
             value={form.instructions}
             onChange={(event) => setForm({ ...form, instructions: event.target.value })}
           />
-        </Field>
+          </Field>
+        </div>
         <div className="form-actions">
           <Button type="submit" loading={busy}>
             Save payment settings
