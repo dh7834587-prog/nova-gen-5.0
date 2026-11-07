@@ -197,9 +197,16 @@ export function serialize(db: Database): SerializedDatabase {
     research: [...db.research.values()],
     creative: [...db.creative.values()],
     files: [...db.files.values()].map((file) => ({ ...file, data: file.data.toString("base64") })),
+    images: [...db.images.values()],
+    bookmarks: [...db.bookmarks.values()],
+    history: [...db.history.values()],
+    customRequests: [...db.customRequests.values()],
+    authTokens: [...db.authTokens.values()],
+    usage: [...db.usage.values()],
     subscriptions: [...db.subscriptions.values()],
     payments: [...db.payments.values()],
     settings: db.settings,
+    trialDays: db.trialDays,
     audit: db.audit,
   };
 }
@@ -208,7 +215,14 @@ export function hydrate(db: Database, raw: SerializedDatabase): void {
   for (const user of raw.users ?? []) db.users.set(user.id, user);
   for (const session of raw.sessions ?? []) db.sessions.set(session.id, session);
   for (const row of raw.conversations ?? []) db.conversations.set(row.id, row);
-  for (const row of raw.memories ?? []) db.memories.set(row.id, row);
+  for (const row of raw.memories ?? []) {
+    // Snapshots written before memory categories existed still hydrate.
+    db.memories.set(row.id, {
+      category: "other",
+      reviewStatus: "approved",
+      ...row,
+    });
+  }
   for (const row of raw.tasks ?? []) db.tasks.set(row.id, row);
   for (const row of raw.notes ?? []) db.notes.set(row.id, row);
   for (const row of raw.snippets ?? []) db.snippets.set(row.id, row);
@@ -217,9 +231,16 @@ export function hydrate(db: Database, raw: SerializedDatabase): void {
   for (const file of raw.files ?? []) {
     db.files.set(file.id, { ...file, data: Buffer.from(file.data, "base64") });
   }
+  for (const row of raw.images ?? []) db.images.set(row.id, row);
+  for (const row of raw.bookmarks ?? []) db.bookmarks.set(row.id, row);
+  for (const row of raw.history ?? []) db.history.set(row.id, row);
+  for (const row of raw.customRequests ?? []) db.customRequests.set(row.id, row);
+  for (const row of raw.authTokens ?? []) db.authTokens.set(row.id, row);
+  for (const row of raw.usage ?? []) db.usage.set(`${row.userId}:${row.day}`, row);
   for (const row of raw.subscriptions ?? []) db.subscriptions.set(row.userId, row);
   for (const row of raw.payments ?? []) db.payments.set(row.id, row);
   if (raw.settings) db.settings = { ...db.settings, ...raw.settings };
+  if (typeof raw.trialDays === "number" && raw.trialDays > 0) db.trialDays = raw.trialDays;
   db.audit = raw.audit ?? [];
 }
 
