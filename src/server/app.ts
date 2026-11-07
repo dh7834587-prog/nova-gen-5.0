@@ -16,6 +16,7 @@ import { generationRoutes } from "./routes/generation.js";
 import { ownerRoutes } from "./routes/owner.js";
 import { recordRoutes } from "./routes/records.js";
 import { researchRoutes } from "./routes/research.js";
+import { codeRoutes } from "./routes/code.js";
 import { createRateLimiter, emailRateLimiter } from "./middleware/rateLimit.js";
 import { createGeminiProvider, ProviderNotConfiguredError, ProviderRequestError } from "./services/gemini.js";
 import { loadDatabase, purgeExpiredSessions, type Database } from "./store.js";
@@ -93,6 +94,7 @@ export function createApp(db: Database = loadDatabase(env.dataDir)): NovaApp {
   app.use("/api/files", fileRoutes(db, guards));
   app.use("/api/browser", browserRoutes(db, guards));
   app.use("/api/research", researchRoutes(db, guards, provider));
+  app.use("/api/code", codeRoutes(db, provider, guards));
   app.use("/api/generate", generationRoutes(db, provider, guards));
   app.use("/api/billing", billingRoutes(db, guards));
   app.use("/api/owner", ownerRoutes(db, guards));
