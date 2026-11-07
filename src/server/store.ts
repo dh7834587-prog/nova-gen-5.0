@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { DEFAULT_PAYMENT_SETTINGS } from "../shared/plans.js";
+import { DEFAULT_PAYMENT_SETTINGS, TRIAL_DAYS } from "../shared/plans.js";
 import type {
   AuditEvent,
   BookmarkRecord,
@@ -168,9 +168,16 @@ interface SerializedDatabase {
   research: ResearchRecord[];
   creative: CreativeProject[];
   files: (Omit<StoredFile, "data"> & { data: string })[];
+  images: GeneratedImageRecord[];
+  bookmarks: BookmarkRecord[];
+  history: BrowsingHistoryRecord[];
+  customRequests: CustomPlanRequest[];
+  authTokens: AuthTokenRecord[];
+  usage: UsageRecord[];
   subscriptions: SubscriptionRecord[];
   payments: PaymentSubmission[];
   settings: PaymentSettings;
+  trialDays: number;
   audit: AuditEvent[];
 }
 
