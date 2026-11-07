@@ -30,6 +30,8 @@ export interface PublicUser {
   preferences: UserPreferences;
   createdAt: string;
   lastLoginAt: string | null;
+  /** Null until the owner delivers a verification link. */
+  emailVerifiedAt?: string | null;
 }
 
 export interface StoredUser extends PublicUser {
