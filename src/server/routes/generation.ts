@@ -101,6 +101,9 @@ export function generationRoutes(db: Database, provider: AiProvider, guards: Aut
 
       try {
         const image = await provider.generateImage({ prompt, aspectRatio: input.aspectRatio });
+        const base64 = image.dataUrl.includes(",")
+          ? image.dataUrl.slice(image.dataUrl.indexOf(",") + 1)
+          : image.dataUrl;
         const record: GeneratedImageRecord = {
           id: newId(),
           ownerId: user.id,
@@ -108,7 +111,7 @@ export function generationRoutes(db: Database, provider: AiProvider, guards: Aut
           mimeType: image.mimeType,
           model: provider.info.imageModel,
           createdAt: nowIso(),
-          data: image.data,
+          data: base64,
         };
         db.images.set(record.id, record);
         consume(db, user.id, "images");
@@ -116,7 +119,7 @@ export function generationRoutes(db: Database, provider: AiProvider, guards: Aut
         save(db);
         res.json({
           image: toSummary(record),
-          data: image.data,
+          data: image.dataUrl,
           prompt,
           model: provider.info.imageModel,
         });
