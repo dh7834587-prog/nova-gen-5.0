@@ -7,11 +7,21 @@ import type {
   ChatMessage,
   Conversation,
   ConversationSummary,
+  Entitlement,
 } from "../../shared/types.js";
 import type { AuthGuards } from "../auth/middleware.js";
 import { env } from "../env.js";
 import { asyncHandler, currentUser, HttpError, log, parseBody, save } from "../http.js";
-import type { AiProvider, ChatTurn } from "../services/gemini.js";
+import type { AiProvider } from "../services/gemini.js";
+import {
+  buildSystemPrompt,
+  conversationTurns,
+  looksLikeSecret,
+  novaChat,
+  retrieveMemories,
+  titleFor,
+} from "../services/novaChat.js";
+import { assertQuota, usageSummary } from "../services/usage.js";
 import { getOwned, listOwned, newId, nowIso, type Database } from "../store.js";
 
 const streamSchema = z.object({
@@ -20,6 +30,7 @@ const streamSchema = z.object({
 });
 
 const createSchema = z.object({ title: z.string().trim().max(120).optional() });
+const renameSchema = z.object({ title: z.string().trim().min(1, "A title is required.").max(120) });
 
 function summarise(conversation: Conversation): ConversationSummary {
   const last = conversation.messages[conversation.messages.length - 1];
@@ -33,28 +44,10 @@ function summarise(conversation: Conversation): ConversationSummary {
   };
 }
 
-function deriveTitle(message: string): string {
-  const flat = message.replace(/\s+/g, " ").trim();
-  return flat.length > 60 ? `${flat.slice(0, 57)}…` : flat || "New conversation";
-}
-
-/** Recalled memories are injected as context so answers stay user-specific. */
-function buildSystemPrompt(db: Database, userId: string, name: string): string {
-  const memories = listOwned(db.memories, userId).slice(0, 8);
-  const lines = [
-    `You are NOVA, the assistant inside NOVA GEN 5.0, a personal AI operating system.`,
-    `You are speaking with ${name}. Be concise, practical and honest about uncertainty.`,
-    `Never claim to have performed actions you cannot perform, and never invent payments,`,
-    `subscriptions or account changes. If something is not configured, say so plainly.`,
-    `Today is ${new Date().toISOString().slice(0, 10)}.`,
-  ];
-  if (memories.length > 0) {
-    lines.push("", "Saved memories from this user's Memory Centre:");
-    for (const memory of memories) {
-      lines.push(`- ${memory.title}: ${memory.content.slice(0, 400)}`);
-    }
-  }
-  return lines.join("\n");
+function entitlementFor(db: Database, userId: string): Entitlement {
+  const subscription = db.subscriptions.get(userId) ?? createTrialSubscription(userId);
+  db.subscriptions.set(userId, subscription);
+  return computeEntitlement(subscription);
 }
 
 export function conversationRoutes(db: Database, guards: AuthGuards): Router {
@@ -68,9 +61,9 @@ export function conversationRoutes(db: Database, guards: AuthGuards): Router {
 
   router.post(
     "/",
-    asyncHandler(async (_req, res) => {
+    asyncHandler(async (req, res) => {
       const user = currentUser(res);
-      const input = parseBody(createSchema, _req.body);
+      const input = parseBody(createSchema, req.body);
       const timestamp = nowIso();
       const conversation: Conversation = {
         id: newId(),
@@ -93,6 +86,22 @@ export function conversationRoutes(db: Database, guards: AuthGuards): Router {
     res.json({ item: conversation });
   });
 
+  router.patch(
+    "/:id",
+    asyncHandler(async (req, res) => {
+      const user = currentUser(res);
+      const conversation = getOwned(db.conversations, user.id, String(req.params.id));
+      if (!conversation) throw new HttpError(404, "not_found", "That conversation does not exist.");
+      const input = parseBody(renameSchema, req.body);
+      const previous = conversation.title;
+      conversation.title = input.title;
+      conversation.updatedAt = nowIso();
+      log(db, user, "assistant.conversation_renamed", `${previous} → ${input.title}`);
+      save(db);
+      res.json({ item: conversation });
+    }),
+  );
+
   router.delete("/:id", (req, res) => {
     const user = currentUser(res);
     const conversation = getOwned(db.conversations, user.id, String(req.params.id));
@@ -110,15 +119,18 @@ export function assistantRoutes(db: Database, provider: AiProvider, guards: Auth
   const router = Router();
   router.use(guards.requireUser, guards.requireModule("assistant"));
 
+  router.get("/usage", (_req, res) => {
+    const user = currentUser(res);
+    res.json({ usage: usageSummary(db, user.id, entitlementFor(db, user.id)) });
+  });
+
   router.post(
     "/stream",
     asyncHandler(async (req, res) => {
       const user = currentUser(res);
       const input = parseBody(streamSchema, req.body);
 
-      const subscription = db.subscriptions.get(user.id) ?? createTrialSubscription(user.id);
-      db.subscriptions.set(user.id, subscription);
-      const entitlement = computeEntitlement(subscription);
+      const entitlement = entitlementFor(db, user.id);
       if (!entitlement.aiAllowed) {
         throw new HttpError(
           402,
@@ -126,6 +138,10 @@ export function assistantRoutes(db: Database, provider: AiProvider, guards: Auth
           entitlement.reason ?? "Your AI access is not active. Choose a plan to continue.",
         );
       }
+
+      // Quota is checked before the stream opens so the client gets a real
+      // HTTP status instead of a half-open SSE connection.
+      assertQuota(db, user.id, entitlement, "chatMessages");
 
       res.status(200);
       res.setHeader("content-type", "text/event-stream; charset=utf-8");
@@ -165,7 +181,7 @@ export function assistantRoutes(db: Database, provider: AiProvider, guards: Auth
         conversation = {
           id: newId(),
           ownerId: user.id,
-          title: deriveTitle(input.message),
+          title: titleFor(input.message),
           createdAt: timestamp,
           updatedAt: timestamp,
           messages: [],
@@ -181,6 +197,14 @@ export function assistantRoutes(db: Database, provider: AiProvider, guards: Auth
         return;
       }
 
+      if (looksLikeSecret(input.message)) {
+        fail(
+          "secret_detected",
+          "That message looks like it contains a password, API key or PIN. NOVA never sends credentials to an AI provider — remove it and try again.",
+        );
+        return;
+      }
+
       const userMessage: ChatMessage = {
         id: newId(),
         role: "user",
@@ -189,7 +213,7 @@ export function assistantRoutes(db: Database, provider: AiProvider, guards: Auth
       };
       conversation.messages.push(userMessage);
       conversation.updatedAt = userMessage.createdAt;
-      if (conversation.messages.length === 1) conversation.title = deriveTitle(input.message);
+      if (conversation.messages.length === 1) conversation.title = titleFor(input.message);
       save(db);
 
       send({
@@ -202,33 +226,43 @@ export function assistantRoutes(db: Database, provider: AiProvider, guards: Auth
       const controller = new AbortController();
       req.on("close", () => controller.abort());
 
-      const turns: ChatTurn[] = conversation.messages
-        .slice(-20)
-        .map((message) => ({
-          role: message.role === "user" ? "user" : "model",
-          text: message.content,
-        }));
+      const memories = retrieveMemories(db, user.id, input.message);
+      const system = buildSystemPrompt({ user, memories });
+      if (memories.length > 0) {
+        send({
+          type: "meta",
+          conversationId: conversation.id,
+          title: conversation.title,
+          model: provider.info.chatModel,
+        });
+      }
 
       let answer = "";
       try {
-        for await (const chunk of provider.streamChat({
-          system: buildSystemPrompt(db, user.id, user.name),
-          turns,
-          signal: controller.signal,
-        })) {
-          answer += chunk;
-          send({ type: "delta", text: chunk });
-        }
+        const result = await novaChat(
+          {
+            db,
+            provider,
+            user,
+            conversation,
+            turns: conversationTurns(conversation),
+            system,
+            signal: controller.signal,
+          },
+          (chunk) => {
+            answer += chunk;
+            send({ type: "delta", text: chunk });
+          },
+        );
+        answer = result.answer;
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "The AI provider could not complete the request.";
-        const code =
-          (error as { code?: string }).code ??
-          (controller.signal.aborted ? "client_aborted" : "provider_error");
         if (controller.signal.aborted) {
           res.end();
           return;
         }
+        const message =
+          error instanceof Error ? error.message : "The AI provider could not complete the request.";
+        const code = (error as { code?: string }).code ?? "provider_error";
         log(db, user, "assistant.provider_error", message.slice(0, 200));
         save(db);
         fail(code, message);
