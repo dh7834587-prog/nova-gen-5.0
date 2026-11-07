@@ -7,6 +7,7 @@ import { PageReadError, readPage } from "../services/pageReader.js";
 import type { AiProvider } from "../services/gemini.js";
 import { buildSystemPrompt, looksLikeSecret, novaComplete, retrieveMemories } from "../services/novaChat.js";
 import { assertQuota, QuotaExceededError } from "../services/usage.js";
+import { computeEntitlement, createTrialSubscription } from "../../shared/plans.js";
 import { nowIso, type Database } from "../store.js";
 
 const investigateSchema = z.object({
@@ -95,7 +96,8 @@ export function researchRoutes(db: Database, guards: AuthGuards, provider: AiPro
         );
       }
       try {
-        assertQuota(db, user, "research");
+        const subscription = db.subscriptions.get(user.id) ?? createTrialSubscription(user.id);
+        assertQuota(db, user.id, computeEntitlement(subscription), "research");
       } catch (error) {
         if (error instanceof QuotaExceededError) {
           throw new HttpError(429, "quota_exceeded", error.message);
