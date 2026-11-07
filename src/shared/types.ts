@@ -169,8 +169,14 @@ export interface ReadPageResult {
   truncated: boolean;
 }
 
+/* ------------------------------------------------------------------ *
+ * Billing: plans, trial entitlement, manual mobile-money payments
+ * ------------------------------------------------------------------ */
+
+export type PlanId = "free" | "premium-monthly" | "premium-yearly" | "custom";
+
 export interface PlanDefinition {
-  id: string;
+  id: PlanId;
   name: string;
   priceLabel: string;
   cadence: string;
@@ -178,13 +184,97 @@ export interface PlanDefinition {
   features: string[];
   highlighted: boolean;
   available: boolean;
+  /** `true` when the plan can be requested through a manual payment. */
+  purchasable: boolean;
+}
+
+export type SubscriptionStatus =
+  | "trialing"
+  | "pending_approval"
+  | "active"
+  | "expired"
+  | "cancelled";
+
+export interface SubscriptionRecord {
+  userId: string;
+  planId: PlanId;
+  status: SubscriptionStatus;
+  trialEndsAt: string;
+  currentPeriodEnd: string | null;
+  customQuote: string;
+  note: string;
+  updatedAt: string;
+  updatedBy: string | null;
+}
+
+/** Effective access rights derived from a subscription and the current clock. */
+export interface Entitlement {
+  planId: PlanId;
+  planName: string;
+  status: SubscriptionStatus;
+  trialEndsAt: string;
+  currentPeriodEnd: string | null;
+  daysRemaining: number;
+  aiAllowed: boolean;
+  customQuote: string;
+  reason: string | null;
+}
+
+export type PaymentMethod = "afrimoney" | "orange_money";
+export type PaymentStatus = "pending" | "approved" | "rejected";
+
+export interface PaymentSubmission {
+  id: string;
+  userId: string;
+  userEmail: string;
+  userName: string;
+  planId: PlanId;
+  planName: string;
+  method: PaymentMethod;
+  amountLabel: string;
+  senderName: string;
+  senderPhone: string;
+  reference: string;
+  note: string;
+  status: PaymentStatus;
+  submittedAt: string;
+  reviewedAt: string | null;
+  reviewedBy: string | null;
+  reviewNote: string;
+}
+
+/** Receiving numbers for manual transfers. Never a client-side secret. */
+export interface PaymentSettings {
+  afrimoneyNumber: string;
+  orangeMoneyNumber: string;
+  accountName: string;
+  instructions: string;
+  updatedAt: string;
+  updatedBy: string | null;
 }
 
 export interface PlanCatalogue {
   plans: PlanDefinition[];
-  currentPlanId: string;
-  billingConfigured: boolean;
+  payments: PaymentSettings;
+  entitlement: Entitlement;
+  pendingPayments: PaymentSubmission[];
+  history: PaymentSubmission[];
+  verificationMode: "manual";
   notice: string;
+}
+
+/* ------------------------------------------------------------------ *
+ * Authentication providers (email is live, social is prepared)
+ * ------------------------------------------------------------------ */
+
+export type OAuthProvider = "google" | "facebook";
+
+export interface AuthProviderStatus {
+  provider: OAuthProvider;
+  label: string;
+  configured: boolean;
+  /** Honest explanation shown in the UI when credentials are absent. */
+  reason: string | null;
 }
 
 export interface ProviderStatus {
@@ -213,13 +303,33 @@ export interface DashboardResponse {
   stats: DashboardStats;
   provider: ProviderStatus;
   recentActivity: AuditEvent[];
+  recentConversations: ConversationSummary[];
+  recentProjects: CreativeProject[];
   accessibleModules: string[];
+  entitlement: Entitlement;
 }
 
 export interface OwnerOverview {
   users: PublicUser[];
+  subscriptions: {
+    userId: string;
+    email: string;
+    planId: PlanId;
+    status: SubscriptionStatus;
+    currentPeriodEnd: string | null;
+    trialEndsAt: string;
+  }[];
+  payments: PaymentSubmission[];
   audit: AuditEvent[];
-  stats: { users: number; activeUsers: number; owners: number; suspended: number };
+  paymentSettings: PaymentSettings;
+  stats: {
+    users: number;
+    activeUsers: number;
+    owners: number;
+    suspended: number;
+    pendingPayments: number;
+    activeSubscriptions: number;
+  };
 }
 
 /** Server-sent events emitted by `POST /api/assistant/stream`. */
