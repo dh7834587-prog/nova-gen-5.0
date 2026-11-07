@@ -16,7 +16,7 @@ import { generationRoutes } from "./routes/generation.js";
 import { ownerRoutes } from "./routes/owner.js";
 import { recordRoutes } from "./routes/records.js";
 import { researchRoutes } from "./routes/research.js";
-import { emailRateLimiter } from "./middleware/rateLimit.js";
+import { createRateLimiter, emailRateLimiter } from "./middleware/rateLimit.js";
 import { createGeminiProvider, ProviderNotConfiguredError, ProviderRequestError } from "./services/gemini.js";
 import { loadDatabase, purgeExpiredSessions, type Database } from "./store.js";
 
