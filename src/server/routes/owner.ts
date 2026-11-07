@@ -3,6 +3,7 @@ import { z } from "zod";
 import { MODULE_IDS } from "../../shared/modules.js";
 import { MS_PER_DAY, computeEntitlement, createTrialSubscription, findPlan } from "../../shared/plans.js";
 import type {
+  CustomPlanRequest,
   OwnerOverview,
   PlanId,
   SubscriptionStatus,
@@ -10,6 +11,8 @@ import type {
 } from "../../shared/types.js";
 import type { AuthGuards } from "../auth/middleware.js";
 import { asyncHandler, currentUser, HttpError, log, parseBody, save, toPublicUser } from "../http.js";
+import { createAuthToken, listPendingTokens } from "../services/authTokens.js";
+import { dayKey, usageRecord } from "../services/usage.js";
 import { nowIso, type Database } from "../store.js";
 
 const moduleGrantSchema = z.union([
@@ -45,6 +48,22 @@ const settingsSchema = z.object({
 });
 
 const reviewSchema = z.object({ reviewNote: z.string().trim().max(400).default("") });
+
+const quoteReplySchema = z.object({
+  priceLabel: z.string().trim().min(1, "Enter the quoted price.").max(60),
+  durationDays: z.number().int().min(1).max(3650),
+  usageLimit: z.string().trim().min(1).max(120),
+  note: z.string().trim().max(600).default(""),
+});
+
+const declineSchema = z.object({ ownerNote: z.string().trim().max(600).default("") });
+
+const trialSchema = z.object({ trialDays: z.number().int().min(1).max(90) });
+
+const authLinkSchema = z.object({
+  email: z.string().trim().toLowerCase().email(),
+  purpose: z.enum(["password_reset", "email_verification"]),
+});
 
 function planDurationDays(planId: PlanId): number {
   if (planId === "premium-yearly") return 365;
