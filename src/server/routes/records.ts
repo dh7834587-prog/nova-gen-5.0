@@ -100,6 +100,17 @@ function collectionRouter<T extends OwnedRow>(
 
 const stamp = () => nowIso();
 
+/** Memories must never hold credentials, keys or mobile-money PINs. */
+function assertMemorySafe(text: string): void {
+  if (looksLikeSecret(text)) {
+    throw new HttpError(
+      400,
+      "secret_in_memory",
+      "That looks like a password, API key or payment PIN. NOVA never stores secrets in memory.",
+    );
+  }
+}
+
 const tagsSchema = z.array(z.string().trim().min(1).max(24)).max(8).default([]);
 
 export function recordRoutes(db: Database, guards: AuthGuards): Router {
@@ -115,15 +126,24 @@ export function recordRoutes(db: Database, guards: AuthGuards): Router {
         content: z.string().trim().min(1).max(env.limits.memoryChars),
         tags: tagsSchema,
         pinned: z.boolean().default(false),
+        category: z
+          .enum(["identity", "preference", "project", "goal", "reference", "other"])
+          .default("other"),
+        reviewStatus: z.enum(["pending", "approved"]).default("approved"),
       }),
       updateSchema: z.object({
         title: z.string().trim().min(1).max(120).optional(),
         content: z.string().trim().min(1).max(env.limits.memoryChars).optional(),
         tags: tagsSchema.optional(),
         pinned: z.boolean().optional(),
+        category: z
+          .enum(["identity", "preference", "project", "goal", "reference", "other"])
+          .optional(),
+        reviewStatus: z.enum(["pending", "approved"]).optional(),
       }),
       build: (input, ownerId) => {
         const at = stamp();
+        assertMemorySafe(`${input.title}\n${input.content}`);
         return {
           id: newId(),
           ownerId,
@@ -131,6 +151,8 @@ export function recordRoutes(db: Database, guards: AuthGuards): Router {
           content: input.content,
           tags: input.tags ?? [],
           pinned: input.pinned ?? false,
+          category: input.category ?? "other",
+          reviewStatus: input.reviewStatus ?? "approved",
           createdAt: at,
           updatedAt: at,
         };
@@ -138,8 +160,11 @@ export function recordRoutes(db: Database, guards: AuthGuards): Router {
       apply: (row, input) => {
         if (input.title !== undefined) row.title = input.title;
         if (input.content !== undefined) row.content = input.content;
+        assertMemorySafe(`${row.title}\n${row.content}`);
         if (input.tags !== undefined) row.tags = input.tags;
         if (input.pinned !== undefined) row.pinned = input.pinned;
+        if (input.category !== undefined) row.category = input.category;
+        if (input.reviewStatus !== undefined) row.reviewStatus = input.reviewStatus;
       },
       describe: (row) => row.title,
     }),
