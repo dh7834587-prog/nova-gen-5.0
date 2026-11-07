@@ -38,6 +38,8 @@ export function PlansPage() {
     try {
       const payload = await api<{ catalogue: PlanCatalogue }>("/api/billing/plans");
       setCatalogue(payload.catalogue);
+      const mine = await api<{ items: CustomPlanRequest[] }>("/api/billing/custom-requests");
+      setRequests(mine.items);
       setError(null);
     } catch (cause) {
       setError(errorMessage(cause));
@@ -290,17 +292,105 @@ export function PlansPage() {
               <Field label="What do you need?">
                 <TextArea
                   rows={4}
-                  value={quoteDetails}
+                  value={requirements}
                   required
                   minLength={10}
                   placeholder="Team seats, higher limits, a dedicated model budget…"
-                  onChange={(event) => setQuoteDetails(event.target.value)}
+                  onChange={(event) => setRequirements(event.target.value)}
                 />
               </Field>
+              <div className="form-grid">
+                <Field label="Scale">
+                  <Select
+                    value={scale}
+                    onChange={(event) => setScale(event.target.value as typeof scale)}
+                  >
+                    <option value="personal">Personal</option>
+                    <option value="team">Team</option>
+                    <option value="business">Business</option>
+                  </Select>
+                </Field>
+                <Field label="Preferred duration" hint="Optional">
+                  <Input
+                    value={durationPreference}
+                    placeholder="3 months"
+                    onChange={(event) => setDurationPreference(event.target.value)}
+                  />
+                </Field>
+              </div>
               <Button type="submit" variant="ghost" loading={quoteBusy}>
-                Request a quote
+                Send brief to owner
               </Button>
+              <p className="muted small">
+                No price is confirmed until the owner replies with a quotation. Accepting a quotation still
+                requires the owner to confirm payment before the plan activates.
+              </p>
             </form>
+          </Panel>
+
+          <Panel>
+            <PanelHeader title="Your custom requests" subtitle="Quotations and decisions" />
+            {requests.length === 0 ? (
+              <p className="muted">No custom requests yet.</p>
+            ) : (
+              <ul className="list">
+                {requests.map((request) => (
+                  <li key={request.id}>
+                    <div className="list-row list-row-static">
+                      <span className="list-body">
+                        <strong>
+                          {request.scale} · {request.durationPreference || "flexible duration"}
+                        </strong>
+                        <span>{request.requirements}</span>
+                        {request.quote ? (
+                          <span>
+                            Quote: {request.quote.priceLabel} · {request.quote.durationDays} days ·{" "}
+                            {request.quote.usageLimit}
+                            {request.quote.note ? ` · ${request.quote.note}` : ""}
+                          </span>
+                        ) : null}
+                        {request.ownerNote ? <span className="muted small">{request.ownerNote}</span> : null}
+                        <span className="muted small">Updated {formatDateTime(request.updatedAt)}</span>
+                      </span>
+                      <div className="row-actions">
+                        <Badge
+                          tone={
+                            request.status === "activated"
+                              ? "success"
+                              : request.status === "quoted"
+                                ? "warning"
+                                : request.status === "declined"
+                                  ? "danger"
+                                  : "violet"
+                          }
+                        >
+                          {request.status.replace("_", " ")}
+                        </Badge>
+                        {request.status === "quoted" ? (
+                          <>
+                            <Button
+                              type="button"
+                              loading={requestBusy === request.id}
+                              onClick={() => void answerQuote(request, "accept")}
+                            >
+                              Accept
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              disabled={requestBusy === request.id}
+                              onClick={() => void answerQuote(request, "decline")}
+                            >
+                              Decline
+                            </Button>
+                          </>
+                        ) : null}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </Panel>
 
           <Panel>
