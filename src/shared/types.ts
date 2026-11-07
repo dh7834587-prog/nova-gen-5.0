@@ -80,6 +80,8 @@ export interface ConversationSummary {
   preview: string;
 }
 
+export type MemoryCategory = "identity" | "preference" | "project" | "goal" | "reference" | "other";
+
 export interface MemoryRecord {
   id: string;
   ownerId: string;
@@ -87,8 +89,110 @@ export interface MemoryRecord {
   content: string;
   tags: string[];
   pinned: boolean;
+  category: MemoryCategory;
+  reviewStatus: "pending" | "approved";
   createdAt: string;
   updatedAt: string;
+}
+
+/** A rendered image kept in the user's private generation history. */
+export interface GeneratedImage {
+  id: string;
+  ownerId: string;
+  prompt: string;
+  mimeType: string;
+  model: string;
+  createdAt: string;
+}
+
+export interface GeneratedImageRecord extends GeneratedImage {
+  /** Base64 payload; only returned by the owning user's own endpoints. */
+  data: string;
+}
+
+export interface BookmarkRecord {
+  id: string;
+  ownerId: string;
+  title: string;
+  url: string;
+  note: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BrowsingHistoryRecord {
+  id: string;
+  ownerId: string;
+  title: string;
+  url: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Per-user, per-day metering used to enforce plan limits honestly. */
+export interface UsageRecord {
+  userId: string;
+  day: string;
+  chatMessages: number;
+  images: number;
+  research: number;
+  updatedAt: string;
+}
+
+export interface UsageLimits {
+  chatMessages: number;
+  images: number;
+  research: number;
+}
+
+export interface UsageSummary {
+  day: string;
+  used: UsageLimits;
+  limits: UsageLimits;
+  unlimited: boolean;
+}
+
+export type CustomRequestStatus = "submitted" | "quoted" | "accepted" | "declined" | "activated";
+
+export interface CustomQuote {
+  priceLabel: string;
+  durationDays: number;
+  usageLimit: string;
+  note: string;
+  quotedAt: string;
+  quotedBy: string | null;
+}
+
+export interface CustomPlanRequest {
+  id: string;
+  userId: string;
+  userEmail: string;
+  userName: string;
+  requirements: string;
+  scale: string;
+  durationPreference: string;
+  status: CustomRequestStatus;
+  quote: CustomQuote | null;
+  ownerNote: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Server-side one-time token, surfaced to the owner for manual delivery. */
+export interface PendingAuthToken {
+  id: string;
+  email: string;
+  purpose: "password_reset" | "email_verification";
+  createdAt: string;
+  expiresAt: string;
+  /** Only shown to the owner because no mail provider is configured. */
+  link: string;
+}
+
+export interface ProviderUsage {
+  promptChars: number;
+  replyChars: number;
+  requests: number;
 }
 
 export interface TaskRecord {
@@ -322,6 +426,10 @@ export interface OwnerOverview {
   payments: PaymentSubmission[];
   audit: AuditEvent[];
   paymentSettings: PaymentSettings;
+  customRequests: CustomPlanRequest[];
+  usage: { userId: string; email: string; day: string; chatMessages: number; images: number; research: number }[];
+  trialDays: number;
+  pendingAuthTokens: PendingAuthToken[];
   stats: {
     users: number;
     activeUsers: number;
