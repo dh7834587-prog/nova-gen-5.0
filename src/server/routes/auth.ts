@@ -8,6 +8,7 @@ import {
   clearSessionCookie,
   createSession,
   destroySession,
+  destroyUserSessions,
   readSessionCookie,
   setSessionCookie,
 } from "../auth/sessions.js";
@@ -21,6 +22,7 @@ import {
   save,
   toPublicUser,
 } from "../http.js";
+import { consumeAuthToken, createAuthToken, revokeAuthTokens } from "../services/authTokens.js";
 import {
   buildAuthorizeUrl,
   consumeOAuthState,
@@ -292,6 +294,79 @@ export function authRoutes(db: Database): Router {
       log(db, user, "account.profile_updated", `Name changed to ${input.name}`);
       save(db);
       res.json({ user: toPublicUser(user) });
+    }),
+  );
+
+  /* ---------------------------------------------------------------- *
+   * Password reset and email verification
+   *
+   * No mail provider is configured (free prototype), so NOVA never claims
+   * an email was sent. Requests are queued for the owner, who mints a
+   * one-time link in the Owner Control Centre and delivers it manually.
+   * ---------------------------------------------------------------- */
+
+  router.post(
+    "/forgot-password",
+    asyncHandler(async (req, res) => {
+      const input = parseBody(z.object({ email: emailSchema }), req.body);
+      const user = findByEmail(db, input.email);
+      if (user) {
+        createAuthToken(db, user, "password_reset");
+        log(db, null, "auth.reset_requested", `Password reset requested for ${user.email}`);
+        save(db);
+      }
+      // Same response either way so the endpoint cannot enumerate accounts.
+      res.status(202).json({
+        ok: true,
+        delivery: "manual",
+        message:
+          "If that email has a NOVA account, a reset request is now queued for the workspace owner. " +
+          "No email service is configured on this server, so the owner delivers the one-time link.",
+      });
+    }),
+  );
+
+  router.post(
+    "/reset-password",
+    asyncHandler(async (req, res) => {
+      const input = parseBody(
+        z.object({
+          token: z.string().trim().min(10).max(400),
+          password: z.string().min(1).max(200),
+        }),
+        req.body,
+      );
+      const policy = checkPasswordPolicy(input.password);
+      if (!policy.ok) {
+        throw new HttpError(400, "weak_password", policy.message ?? "Choose a stronger password.");
+      }
+      const user = consumeAuthToken(db, "password_reset", input.token);
+      if (!user) {
+        throw new HttpError(400, "invalid_token", "That reset link is invalid or has expired.");
+      }
+      const digest = await hashPassword(input.password);
+      user.passwordHash = digest.hash;
+      user.passwordSalt = digest.salt;
+      destroyUserSessions(db, user.id);
+      revokeAuthTokens(db, user.id);
+      log(db, user, "auth.password_reset", `${user.email} reset their password`);
+      save(db);
+      res.json({ ok: true, message: "Password updated. Sign in with your new password." });
+    }),
+  );
+
+  router.post(
+    "/verify-email",
+    asyncHandler(async (req, res) => {
+      const input = parseBody(z.object({ token: z.string().trim().min(10).max(400) }), req.body);
+      const user = consumeAuthToken(db, "email_verification", input.token);
+      if (!user) {
+        throw new HttpError(400, "invalid_token", "That verification link is invalid or has expired.");
+      }
+      user.emailVerifiedAt = nowIso();
+      log(db, user, "auth.email_verified", `${user.email} verified their email`);
+      save(db);
+      res.json({ ok: true, user: toPublicUser(user) });
     }),
   );
 
