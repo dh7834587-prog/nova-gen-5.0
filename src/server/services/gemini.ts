@@ -21,6 +21,7 @@ export interface AiProvider {
   }): AsyncGenerator<string, void, unknown>;
   generateImage(input: {
     prompt: string;
+    aspectRatio?: string;
     signal?: AbortSignal;
   }): Promise<{ dataUrl: string; mimeType: string }>;
 }
@@ -169,8 +170,9 @@ export function createGeminiProvider(config: ProviderConfig): AiProvider {
       }
     },
 
-    async generateImage({ prompt, signal }) {
+    async generateImage({ prompt, aspectRatio, signal }) {
       const apiKey = requireKey();
+      const imageConfig = aspectRatio ? { imageConfig: { aspectRatio } } : {};
       const response = await fetch(
         `${ENDPOINT}/${encodeURIComponent(config.imageModel)}:generateContent`,
         {
@@ -179,7 +181,10 @@ export function createGeminiProvider(config: ProviderConfig): AiProvider {
             "content-type": "application/json",
             "x-goog-api-key": apiKey,
           },
-          body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }] }),
+          body: JSON.stringify({
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+            generationConfig: imageConfig,
+          }),
           signal,
         },
       );
