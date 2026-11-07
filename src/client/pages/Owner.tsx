@@ -587,3 +587,221 @@ function AuditRow({ event }: { event: AuditEvent }) {
     </div>
   );
 }
+
+function CustomRequestReview({
+  request,
+  busy,
+  onQuote,
+  onDecline,
+  onActivate,
+}: {
+  request: CustomPlanRequest;
+  busy: boolean;
+  onQuote: (quote: { priceLabel: string; durationDays: number; usageLimit: string; note: string }) => void;
+  onDecline: (ownerNote: string) => void;
+  onActivate: () => void;
+}) {
+  const [priceLabel, setPriceLabel] = useState(request.quote?.priceLabel ?? "");
+  const [durationDays, setDurationDays] = useState(String(request.quote?.durationDays ?? 30));
+  const [usageLimit, setUsageLimit] = useState(request.quote?.usageLimit ?? "");
+  const [note, setNote] = useState(request.quote?.note ?? "");
+  const [ownerNote, setOwnerNote] = useState(request.ownerNote);
+  const closed = request.status === "activated" || request.status === "declined";
+
+  return (
+    <Panel>
+      <PanelHeader
+        title={`${request.userName} · ${request.userEmail}`}
+        subtitle={`${request.scale} · ${request.durationPreference || "flexible duration"} · submitted ${formatDateTime(request.createdAt)}`}
+      />
+      <div className="stack-tight">
+        <p>{request.requirements}</p>
+        <div className="inline-controls">
+          <Badge
+            tone={
+              request.status === "activated"
+                ? "success"
+                : request.status === "declined"
+                  ? "danger"
+                  : request.status === "accepted"
+                    ? "violet"
+                    : "warning"
+            }
+          >
+            {request.status.replace("_", " ")}
+          </Badge>
+          {request.quote ? (
+            <span className="muted small">
+              Quoted {request.quote.priceLabel} · {request.quote.durationDays} days · {request.quote.usageLimit}
+            </span>
+          ) : null}
+        </div>
+
+        {closed ? null : (
+          <>
+            <div className="form-grid">
+              <Field label="Quoted price" hint="Example: Le 350">
+                <Input value={priceLabel} onChange={(event) => setPriceLabel(event.target.value)} />
+              </Field>
+              <Field label="Duration (days)">
+                <Input
+                  type="number"
+                  min={1}
+                  max={3650}
+                  value={durationDays}
+                  onChange={(event) => setDurationDays(event.target.value)}
+                />
+              </Field>
+              <Field label="Usage limit">
+                <Input
+                  value={usageLimit}
+                  placeholder="500 AI messages / month"
+                  onChange={(event) => setUsageLimit(event.target.value)}
+                />
+              </Field>
+              <Field label="Note to user" hint="Optional">
+                <Input value={note} onChange={(event) => setNote(event.target.value)} />
+              </Field>
+            </div>
+            <div className="form-actions">
+              <Button
+                type="button"
+                loading={busy}
+                disabled={!priceLabel.trim() || !usageLimit.trim()}
+                onClick={() =>
+                  onQuote({
+                    priceLabel: priceLabel.trim(),
+                    durationDays: Math.max(1, Math.min(3650, Number(durationDays) || 30)),
+                    usageLimit: usageLimit.trim(),
+                    note: note.trim(),
+                  })
+                }
+              >
+                {request.quote ? "Update quotation" : "Send quotation"}
+              </Button>
+              {request.status === "accepted" ? (
+                <Button type="button" variant="ghost" disabled={busy} onClick={onActivate}>
+                  Activate accepted plan
+                </Button>
+              ) : null}
+            </div>
+            <div className="form-grid">
+              <Field label="Decline note" hint="Shown to the user">
+                <Input value={ownerNote} onChange={(event) => setOwnerNote(event.target.value)} />
+              </Field>
+            </div>
+            <div className="form-actions">
+              <Button
+                type="button"
+                variant="danger"
+                disabled={busy}
+                onClick={() => {
+                  if (!window.confirm(`Decline ${request.userEmail}'s custom request?`)) return;
+                  onDecline(ownerNote.trim());
+                }}
+              >
+                Decline request
+              </Button>
+            </div>
+            <p className="muted small">
+              A custom plan activates only after you send a quotation, the user accepts it, and you press
+              activate.
+            </p>
+          </>
+        )}
+      </div>
+    </Panel>
+  );
+}
+
+function TrialForm({
+  trialDays,
+  busy,
+  onSave,
+}: {
+  trialDays: number;
+  busy: boolean;
+  onSave: (trialDays: number) => void;
+}) {
+  const [days, setDays] = useState(String(trialDays));
+
+  return (
+    <form
+      className="stack-tight"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const value = Math.max(1, Math.min(90, Number(days) || trialDays));
+        setDays(String(value));
+        onSave(value);
+      }}
+    >
+      <Field label="Trial length in days" hint="1–90 days. Existing trials keep their original end date.">
+        <Input type="number" min={1} max={90} value={days} onChange={(event) => setDays(event.target.value)} />
+      </Field>
+      <div className="form-actions">
+        <Button type="submit" loading={busy}>
+          Save trial length
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function AuthLinkForm({
+  busy,
+  onMint,
+}: {
+  busy: boolean;
+  onMint: (email: string, purpose: "password_reset" | "email_verification") => void;
+}) {
+  const [email, setEmail] = useState("");
+  const [purpose, setPurpose] = useState<"password_reset" | "email_verification">("password_reset");
+
+  return (
+    <form
+      className="stack-tight"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onMint(email.trim().toLowerCase(), purpose);
+      }}
+    >
+      <div className="form-grid">
+        <Field label="Account email">
+          <Input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} />
+        </Field>
+        <Field label="Link type">
+          <Select
+            value={purpose}
+            onChange={(event) => setPurpose(event.target.value as typeof purpose)}
+          >
+            <option value="password_reset">Password reset</option>
+            <option value="email_verification">Email verification</option>
+          </Select>
+        </Field>
+      </div>
+      <div className="form-actions">
+        <Button type="submit" loading={busy} disabled={!email.trim()}>
+          Create single-use link
+        </Button>
+      </div>
+      <p className="muted small">
+        The link is minted once and shown only in this response. Deliver it to the account holder yourself.
+      </p>
+    </form>
+  );
+}
+
+function AuthTokenRow({ token }: { token: PendingAuthToken }) {
+  return (
+    <div className="list-row list-row-static">
+      <span className="list-body">
+        <strong>{token.email}</strong>
+        <span className="muted small">
+          {token.purpose === "password_reset" ? "Password reset" : "Email verification"} · expires{" "}
+          {formatDateTime(token.expiresAt)}
+        </span>
+      </span>
+      <Badge tone="warning">Unused</Badge>
+    </div>
+  );
+}
