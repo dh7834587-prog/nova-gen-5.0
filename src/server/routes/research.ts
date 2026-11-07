@@ -4,6 +4,7 @@ import type { AuthGuards } from "../auth/middleware.js";
 import { env } from "../env.js";
 import { asyncHandler, currentUser, HttpError, log, parseBody, save } from "../http.js";
 import { PageReadError, readPage } from "../services/pageReader.js";
+import type { AiProvider } from "../services/gemini.js";
 import { buildSystemPrompt, looksLikeSecret, novaComplete, retrieveMemories } from "../services/novaChat.js";
 import { assertQuota, QuotaExceededError } from "../services/usage.js";
 import { nowIso, type Database } from "../store.js";
@@ -36,7 +37,7 @@ function unwrapResultUrl(href: string): string | null {
  * source from the AI explanation so a generated summary is never presented as a
  * verified fact.
  */
-export function researchRoutes(db: Database, guards: AuthGuards, provider: Parameters<typeof buildSystemPrompt>[0] extends never ? never : any): Router {
+export function researchRoutes(db: Database, guards: AuthGuards, provider: AiProvider): Router {
   const router = Router();
   router.use(guards.requireUser, guards.requireModule("research"));
 
