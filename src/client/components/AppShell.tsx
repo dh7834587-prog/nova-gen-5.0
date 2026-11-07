@@ -174,6 +174,7 @@ export function AppShell({ module, children }: { module: ModuleDefinition; child
           </div>
         </header>
         <main className="content" id="main-content">
+          <InstallPrompt />
           {children}
         </main>
       </div>
